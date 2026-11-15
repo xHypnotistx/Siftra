@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.3 (2026-11-15): stage 2 of the concept redesign (app drawer + search)
+
+- **Themed drawer.** Follows the selected layout's style and colors (including Orbit's light look). Grab handle; swipe down on the header to close.
+- **Groups / A–Z switch,** remembered between visits.
+  - *Groups*: section headers in the layout's style with counts, each group in one glass card, and chips that scroll to a group.
+  - *A–Z*: alphabetical grid with letter headers (Turkish letters included) and a side rail. Tap or drag it to jump, with a large letter bubble while dragging.
+- **Search.** Smarter ranking: name start, then word start, then anywhere in the name, then letters in order (handles Turkish characters, e.g. "iscep" finds İşCep), with often-opened apps first.
+  - *Top hit card*: big icon, group, how many times it was opened today, Open and App info buttons. Long-press opens the app menu.
+  - **Enter / Go opens the top hit.**
+  - *Settings matches*: e.g. "gemini" offers *Settings › Sorting & Gemini* and opens Settings right on that page.
+  - *Search the web* and *Search Play Store* rows.
+  - *No results*: "Nothing called “…”" with a *Show hidden apps* option.
+  - *Recent searches*: last 6, kept on the phone. Shown as chips in the drawer and under results; tap to search again.
+- **Tests.** New `drawerAzEnterRecentSettings` test (A–Z switch and rail, Enter opens top hit, recents, settings from search). All 22 pass.
+
 ## 0.5.2 (2026-11-15): stage 1 of the concept redesign (Settings + Welcome)
 
 - **Per-layout styling for every new screen.** A shared kit (rows, labels, chips, switches, buttons, icon tiles, line glyphs, layout thumbnails) follows the selected home layout: Index Lime numbered lists, Cards frosted cards, Strata offset layers, Monolith caps and ribbed glass, Orbit light pills.

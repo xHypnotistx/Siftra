@@ -359,6 +359,14 @@ class Siftra(private val ctx: Context) {
     fun hiddenApps() = apps.filter { it.pkg in hidden }.distinctBy { it.pkg }.sortedByDescending { hiddenAt(it.pkg) }
 
     /* ---------- sorting stats ---------- */
+    /* ---------- recent searches (on-device, last 6) ---------- */
+    var recent by mutableStateOf(prefs.getString("recent", "")!!.split('\u0001').filter { it.isNotBlank() }); private set
+    fun addRecent(q: String) {
+        val t = q.trim(); if (t.isEmpty()) return
+        recent = (listOf(t) + recent.filterNot { it.equals(t, ignoreCase = true) }).take(6)
+        prefs.edit().putString("recent", recent.joinToString("\u0001")).apply()
+    }
+
     fun manualMoves() = prefs.all.keys.count { it.startsWith("ov|") }
     /** (sorted by on-device rules, placed by Gemini, moved by you) */
     fun sortStats(): Triple<Int, Int, Int> {

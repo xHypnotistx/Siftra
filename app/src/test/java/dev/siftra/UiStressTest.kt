@@ -122,7 +122,7 @@ class UiStressTest {
         rule.waitUntil(5_000) { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
         shot("drawer")
         val before = model().counts.values.sum()
-        rule.onAllNodes(isRoot())[0].performTouchInput { click(center.copy(y = height * 0.92f)); click(center) }
+        rule.onAllNodes(isRoot())[0].performTouchInput { click(androidx.compose.ui.geometry.Offset(width / 2f, 12f)) }   // empty handle area
         rule.waitForIdle()
         assertEquals("tap fell through the drawer", before, model().counts.values.sum())
         assertTrue(rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty())   // drawer still open
@@ -131,7 +131,7 @@ class UiStressTest {
         rule.waitForIdle()
         assertTrue(exists("Instagram")); assertFalse(exists("Akbank"))
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("zzzz")
-        assertTrue(exists("No apps match “instazzzz”"))
+        assertTrue(exists("Nothing called") && exists("“instazzzz”"))
         rule.onAllNodes(hasSetTextAction())[0].performTextClearance()
         // chips jump
         listOf("Finance", "Travel", "Government", "Samsung Extras").forEach { t ->
@@ -141,19 +141,19 @@ class UiStressTest {
         }
         // favorite via long-press
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("Instagram")
-        rule.onAllNodes(hasText("Instagram") and !hasSetTextAction())[0].performTouchInput { longClick() }
+        rule.onAllNodes(hasText("Instagram") and !hasSetTextAction() and SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnLongClick))[0].performTouchInput { longClick() }
         rule.onNodeWithText("☆  Add to favorites").performClick()
         // hide
         rule.onAllNodes(hasSetTextAction())[0].performTextClearance()
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("Akbank")
-        rule.onAllNodes(hasText("Akbank") and !hasSetTextAction())[0].performTouchInput { longClick() }
+        rule.onAllNodes(hasText("Akbank") and !hasSetTextAction() and SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnLongClick))[0].performTouchInput { longClick() }
         rule.onNodeWithText("◌  Hide").performClick()
         rule.waitForIdle()
-        assertFalse(exists("Akbank") && !exists("No apps match “Akbank”"))
+        assertTrue(exists("“Akbank”"))   // hidden → "Nothing called “Akbank”"
         // move
         rule.onAllNodes(hasSetTextAction())[0].performTextClearance()
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("Waze")
-        rule.onAllNodes(hasText("Waze") and !hasSetTextAction())[0].performTouchInput { longClick() }
+        rule.onAllNodes(hasText("Waze") and !hasSetTextAction() and SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnLongClick))[0].performTouchInput { longClick() }
         rule.onNodeWithText("⇄  Move to group…").performClick()
         rule.onNodeWithText("○  Games").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
@@ -166,6 +166,38 @@ class UiStressTest {
         rule.onNodeWithText("Favorites").performClick()
         rule.waitUntil(5_000) { exists("Instagram") }
         println("drawer test body: all checks passed")
+    }
+
+    /* ---------- drawer: A–Z view, Enter opens top hit, recents, settings from search ---------- */
+
+    @Test fun drawerAzEnterRecentSettings() {
+        start(HomeLayout.INDEX)
+        rule.onNodeWithText("︿  All apps").performClick()
+        rule.waitUntil(5_000) { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+        // A–Z view + rail jump
+        rule.onNodeWithText("A–Z").performClick(); rule.waitForIdle()
+        assertEquals("AZ", model().prefs.getString("drawerView", ""))
+        rule.onNodeWithContentDescription("Letter index").performTouchInput { down(bottomCenter.copy(y = height * 0.9f)); up() }
+        rule.waitForIdle()
+        shot("drawer-az")
+        rule.onNodeWithText("Groups").performClick(); rule.waitForIdle()
+        // Enter opens the top hit and saves the query as a recent search
+        val s = model()
+        val field = rule.onAllNodes(hasSetTextAction())[0]
+        field.performTextInput("spot")
+        rule.waitUntil(3_000) { exists("Top hit") || exists("TOP HIT") }
+        shot("search-results")
+        val before = s.counts.filterKeys { it.startsWith("com.spotify.music") }.values.sum()
+        field.performImeAction()
+        rule.waitForIdle()
+        assertEquals(before + 1, s.counts.filterKeys { it.startsWith("com.spotify.music") }.values.sum())
+        assertEquals("spot", s.recent.firstOrNull())
+        // settings match opens Settings on that page
+        field.performTextClearance(); field.performTextInput("gemini")
+        rule.waitUntil(3_000) { exists("Settings › Sorting & Gemini") }
+        rule.onNodeWithText("Settings › Sorting & Gemini", substring = true).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.waitUntil(5_000) { exists("Re-sort all apps") || exists("RE-SORT ALL APPS") }
+        shot("search-to-settings")
     }
 
     /* ---------- every settings page and control, then hammer layouts ---------- */

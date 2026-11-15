@@ -68,8 +68,8 @@ private fun Header(title: String, onBack: (() -> Unit)?, right: @Composable () -
 }
 
 @Composable
-fun SettingsScreen(s: Siftra, isHome: Boolean, onClose: () -> Unit, onSetHome: () -> Unit) {
-    var page by remember { mutableStateOf(SPage.HOME) }
+fun SettingsScreen(s: Siftra, isHome: Boolean, start: SPage = SPage.HOME, onClose: () -> Unit, onSetHome: () -> Unit) {
+    var page by remember { mutableStateOf(start) }
     BackHandler { if (page == SPage.HOME) onClose() else page = SPage.HOME }
     AnimatedContent(page, transitionSpec = {
         val fwd = targetState.ordinal > initialState.ordinal
@@ -114,7 +114,7 @@ private fun SettingsHome(s: Siftra, isHome: Boolean, onClose: () -> Unit, onSetH
     }
 }
 
-object BuildConfigLite { const val VERSION = "0.5.2" }
+object BuildConfigLite { const val VERSION = "0.5.3" }
 
 @Composable
 private fun LookPage(s: Siftra, back: () -> Unit) = Page {

@@ -110,6 +110,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
     var drawer by remember { mutableStateOf(false) }
     var menuFor by remember { mutableStateOf<AppItem?>(null) }
     var settings by remember { mutableStateOf(false) }
+    var settingsStart by remember { mutableStateOf(SPage.HOME) }
     var welcomed by remember { mutableStateOf(s.prefs.getBoolean("welcomed", false)) }
     var searchFocus by remember { mutableStateOf(false) }
     val act = androidx.compose.ui.platform.LocalContext.current as MainActivity
@@ -158,7 +159,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
         Box(Modifier.fillMaxSize()) {
             if (s.backdrop != Backdrop.WALLPAPER) Canvas(Modifier.fillMaxSize()) { drawBackdrop(env) }
             // dim layer
-            val dim by animateFloatAsState(if (settings || !welcomed) 0.12f else if (overlay) 0.42f else 0f, tween(260), label = "dim")
+            val dim by animateFloatAsState(if (settings || !welcomed || drawer) 0.14f else if (overlay) 0.42f else 0f, tween(260), label = "dim")
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
 
             val homeAlpha by animateFloatAsState(if (drawer || settings || !welcomed) 0f else if (openGroup != null) 0.3f else 1f, tween(240), label = "ha")
@@ -176,7 +177,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                 onGroup = { lastGroup = it; openGroup = it },
                 onLaunch = ::open, onLong = onLong,
                 onDrawer = { searchFocus = it; drawer = true },
-                onSettings = { settings = true },
+                onSettings = { settingsStart = SPage.HOME; settings = true },
                 onOrganize = { scope.launch { s.organize(force = true) } },
                 onSetHome = { askHome(); isHome = true },
                 overlay = overlay,
@@ -210,16 +211,16 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                 }
             }
 
-            AnimatedVisibility(drawer, enter = slideInVertically(spring(0.86f, 380f)) { it / 4 } + fadeIn(tween(180)),
-                exit = slideOutVertically(tween(220)) { it / 5 } + fadeOut(tween(180))) {
-                Drawer(s, searchFocus, onClose = { drawer = false }, onLaunch = { a, r -> open(a, r) }, onLong = onLong,
-                    onOrganize = { scope.launch { s.organize(force = true) } })
-            }
-
             CompositionLocalProvider(LocalInk provides ink, LocalUi provides homeUi, LocalRowStyle provides s.layout.rowStyle) {
+                AnimatedVisibility(drawer, enter = slideInVertically(spring(dampingRatio = 1f, stiffness = 380f)) { it / 4 } + fadeIn(tween(180)),
+                    exit = slideOutVertically(tween(220)) { it / 5 } + fadeOut(tween(180))) {
+                    AppDrawer(s, searchFocus, onClose = { drawer = false }, onLaunch = { a, r -> open(a, r) }, onLong = onLong,
+                        onOrganize = { scope.launch { s.organize(force = true) } },
+                        onOpenSettings = { p -> settingsStart = p; drawer = false; settings = true })
+                }
                 AnimatedVisibility(settings, enter = fadeIn(tween(200)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 380f)) { it / 10 },
                     exit = fadeOut(tween(180)) + slideOutVertically(tween(200)) { it / 12 }) {
-                    SettingsScreen(s, isHome, onClose = { settings = false }, onSetHome = { askHome(); isHome = true })
+                    SettingsScreen(s, isHome, settingsStart, onClose = { settings = false; settingsStart = SPage.HOME }, onSetHome = { askHome(); isHome = true })
                 }
                 AnimatedVisibility(!welcomed, enter = fadeIn(), exit = fadeOut(tween(260))) {
                     WelcomeScreen(s, onSetHome = { askHome(); isHome = true }) {
@@ -368,74 +369,6 @@ private fun Shelf(s: Siftra, swipeUp: Modifier, onLaunch: (AppItem, Rect?) -> Un
             } else Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 list.forEach { a -> Box(Modifier.width(64.dp)) { AppIcon(a, onLaunch, onLong) } }
             }
-        }
-    }
-}
-
-/* ======================= drawer ======================= */
-
-@Composable
-private fun Drawer(s: Siftra, focusSearch: Boolean, onClose: () -> Unit, onLaunch: (AppItem, Rect?) -> Unit,
-                   onLong: (AppItem) -> Unit, onOrganize: () -> Unit) {
-    var q by remember { mutableStateOf("") }
-    val fr = remember { FocusRequester() }
-    val sections = s.sections(true)
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { if (focusSearch) { delay(150); fr.requestFocus() } }
-
-    // index of each section header inside the LazyColumn
-    val headerIndex = remember(sections) {
-        var i = 0
-        sections.associate { (g, l) -> (g to i).also { i += 1 + (l.size + 3) / 4 } }
-    }
-
-    Column(Modifier.fillMaxSize().noRipple { }                          // swallow taps so nothing hits the hidden home
-        .statusBarsPadding().navigationBarsPadding().imePadding()) {
-        Row(
-            Modifier.padding(horizontal = 18.dp).padding(top = 14.dp).pointerInput(Unit) {
-                var acc = 0f
-                detectVerticalDragGestures(onDragStart = { acc = 0f }, onDragEnd = { if (acc > 120f) onClose() }) { _, dy -> acc += dy }
-            },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.weight(1f).glass(22.dp, true).padding(horizontal = 16.dp, vertical = 12.dp)) {
-                if (q.isEmpty()) Text("⌕  Search apps", 15.sp, alpha = 0.6f)
-                BasicTextField(q, { q = it }, Modifier.fillMaxWidth().focusRequester(fr), singleLine = true,
-                    textStyle = TextStyle(Color.White, 15.sp), cursorBrush = SolidColor(Color.White))
-            }
-            Spacer(Modifier.width(8.dp)); CircleBtn("⟲", onOrganize)
-        }
-        if (q.isBlank()) {
-            LazyRow(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(sections, key = { it.first.name }) { (g, _) ->
-                    Box(Modifier.glass(16.dp).clickable { scope.launch { listState.animateScrollToItem(headerIndex[g] ?: 0) } }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)) { Text(g.title, 13.sp) }
-                }
-            }
-            LazyColumn(state = listState, contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 24.dp)) {
-                sections.forEach { (g, list) ->
-                    item(key = "h_${g.name}") {
-                        Row(Modifier.padding(start = 6.dp, top = 16.dp, bottom = 10.dp).animateItem(), verticalAlignment = Alignment.Bottom) {
-                            Text(g.title, 24.sp, display = true)
-                            Spacer(Modifier.width(8.dp)); Text("${list.size}", 12.sp, alpha = 0.55f)
-                        }
-                    }
-                    items(list.chunked(4), key = { row -> "r_${g.name}_${row.first().key}" }) { row ->
-                        Row(Modifier.fillMaxWidth().glass(20.dp).padding(vertical = 10.dp).animateItem()) {
-                            row.forEach { a -> Box(Modifier.weight(1f)) { AppIcon(a, onLaunch, onLong) } }
-                            repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-                }
-            }
-        } else {
-            val res = s.visible.filter { it.label.contains(q.trim(), ignoreCase = true) }
-            LazyVerticalGrid(GridCells.Fixed(4), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(res, key = { it.key }) { a -> AppIcon(a, onLaunch, onLong) }
-            }
-            if (res.isEmpty()) Text("No apps match “$q”", 14.sp, alpha = 0.6f, modifier = Modifier.padding(24.dp))
         }
     }
 }
