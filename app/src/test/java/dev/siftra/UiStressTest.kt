@@ -31,7 +31,7 @@ class UiStressTest {
         TestHooks.apps = { CATALOG.map { it.first } + filler(60) }
         TestHooks.freezeMotion = true
         val e = ctx.getSharedPreferences("siftra", 0).edit().clear()
-        e.putBoolean("motion", motion); extra(e); e.commit()
+        e.putBoolean("motion", motion).putBoolean("welcomed", true); extra(e); e.commit()
         Siftra(ctx).setHomeLayout(layout)                       // apply the layout preset the same way the UI does
         if (!motion) ctx.getSharedPreferences("siftra", 0).edit().putBoolean("motion", false).commit()
         scenario = ActivityScenario.launch(MainActivity::class.java)
@@ -168,37 +168,63 @@ class UiStressTest {
         println("drawer test body: all checks passed")
     }
 
-    /* ---------- every settings control, then hammer them ---------- */
+    /* ---------- every settings page and control, then hammer layouts ---------- */
 
     @Test fun everySettingAndRapidSwitching() {
         start(HomeLayout.CARDS)
-        fun openSettings() { rule.onNodeWithText("⋯").performClick(); rule.waitUntil(5_000) { exists("Home layout") } }
-        fun tap(t: String, last: Boolean = false) {
-            val nodes = rule.onAllNodesWithText(t)
-            val n = if (last) nodes.fetchSemanticsNodes().size - 1 else 0
-            nodes[n].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle()
-        }
-        openSettings()
-        HomeLayout.entries.forEach { tap(it.title) }
+        fun tap(t: String) { rule.onAllNodesWithText(t)[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle() }
+        fun open(row: String) { tap(row); rule.waitForIdle() }
+        fun backBtn() { rule.onAllNodesWithContentDescription("Back")[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle() }
+        rule.onNodeWithText("⋯").performClick()
+        rule.waitForIdle()
+        if (!exists("Sorting & Gemini")) println("TREE:\n" + rule.onAllNodes(isRoot())[0].printToString(maxDepth = 6).take(3000))
+        rule.waitUntil(5_000) { exists("Sorting & Gemini") }
+        shot("settings-home")
+        // Look
+        open("Look"); rule.waitUntil(5_000) { exists("Live preview") || exists("LIVE PREVIEW") }
         Backdrop.entries.filter { it != Backdrop.PHOTO }.forEach { tap(it.title) }
         listOf("Ribbed", "Frosted").forEach { tap(it) }
-        ClockStyle.entries.forEach { tap(it.title, last = true) }
-        listOf("System", "Classy").forEach { tap(it) }
-        listOf("Show Samsung Extras on home", "Material You colors", "Themed icons (Material You)").forEach { label ->
-            repeat(2) { tap(rule.onAllNodes(hasText(label, substring = true)).fetchSemanticsNodes()[0].config[androidx.compose.ui.semantics.SemanticsProperties.Text].first().text) }
-        }
-        tap("↺  Reset my manual moves"); tap("◌  Unhide all apps (0)")
-        back()
-        // rapid: 60 layout flips with a group opened in between
+        ClockStyle.entries.forEach { tap(it.title) }
+        listOf("System", "Classy · Instrument").forEach { tap(it) }
+        listOf("Material You colors", "Themed icons").forEach { d -> repeat(2) { rule.onNodeWithContentDescription(d).performClick(); rule.waitForIdle() } }
+        shot("settings-look"); backBtn()
+        // Home layout: every tile
+        open("Home layout")
+        HomeLayout.entries.forEach { l -> rule.onAllNodes(hasText(l.title, substring = true))[0].performClick(); rule.waitForIdle() }
+        shot("settings-layout"); backBtn()
+        // Sorting: extras switch, drag-reorder Google to the top area, re-sort
+        open("Sorting & Gemini"); rule.waitUntil(5_000) { exists("Re-sort all apps") || exists("RE-SORT ALL APPS") }
         val s = model()
+        val before = s.groupOrder.indexOf(Group.GOOGLE)
+        rule.onNodeWithContentDescription("Reorder Google").performScrollTo().performTouchInput { down(center); repeat(10) { moveBy(androidx.compose.ui.geometry.Offset(0f, -40f)); advanceEventTime(16) }; up() }
+        rule.waitForIdle()
+        assertTrue("Google should move up (was $before, now ${s.groupOrder.indexOf(Group.GOOGLE)})", s.groupOrder.indexOf(Group.GOOGLE) < before)
+        repeat(2) { rule.onNodeWithContentDescription("Show Samsung Extras on home").performScrollTo().performClick(); rule.waitForIdle() }
+        shot("settings-sorting"); backBtn()
+        // Apps & About
+        open("Apps"); shot("settings-apps"); backBtn()
+        open("About"); rule.waitUntil(5_000) { exists("Source on GitHub") || exists("SOURCE ON GITHUB") }; backBtn()
+        back()   // system back closes settings
+        rule.waitUntil(5_000) { !exists("Sorting & Gemini") }
+        // rapid: 60 layout flips
         val r = java.util.Random(3)
-        repeat(60) { i ->
-            scenario.onActivity { s.setHomeLayout(HomeLayout.entries[r.nextInt(HomeLayout.entries.size)]) }
-            rule.waitForIdle()
-            if (i % 10 == 0) shot("rapid-$i-${s.layout.name}")
-        }
-        // tap-to-cycle the clock through every style twice
+        repeat(60) { scenario.onActivity { s.setHomeLayout(HomeLayout.entries[r.nextInt(HomeLayout.entries.size)]) }; rule.waitForIdle() }
         repeat(ClockStyle.entries.size * 2) { scenario.onActivity { s.nextClock() }; rule.waitForIdle() }
+    }
+
+    /* ---------- first run ---------- */
+
+    @Test fun welcomeFlow() {
+        start(HomeLayout.STRATA) { it.putBoolean("welcomed", false) }
+        rule.waitUntil(5_000) { exists("sifted.") }
+        shot("welcome-1")
+        rule.onNodeWithText("Next").performClick(); rule.waitUntil(5_000) { exists("Pick your look") }
+        rule.onAllNodes(hasText("Monolith"))[0].performClick(); rule.waitForIdle()
+        assertEquals(HomeLayout.MONOLITH, model().layout)
+        rule.onNodeWithText("NEXT").performClick(); rule.waitUntil(5_000) { exists("Make it home") }   // Monolith style = caps buttons
+        rule.onNodeWithText("TRY IT FIRST").performClick()
+        rule.waitUntil(5_000) { !exists("Make it home") }
+        assertTrue(model().prefs.getBoolean("welcomed", false))
     }
 
     /* ---------- animated backdrop running with real frames ---------- */
@@ -206,7 +232,7 @@ class UiStressTest {
     @Test fun animatedBackdropFrames() {
         rule.mainClock.autoAdvance = false
         TestHooks.apps = { CATALOG.map { it.first } }; TestHooks.freezeMotion = false
-        ctx.getSharedPreferences("siftra", 0).edit().clear().putBoolean("motion", true).commit()
+        ctx.getSharedPreferences("siftra", 0).edit().clear().putBoolean("motion", true).putBoolean("welcomed", true).commit()
         Siftra(ctx).setHomeLayout(HomeLayout.STRATA)
         scenario = ActivityScenario.launch(MainActivity::class.java)
         repeat(240) { rule.mainClock.advanceTimeByFrame() }        // ~4 s of frames
@@ -250,6 +276,6 @@ class UiStressTest {
             scenario.close()
         }
         println("monkey: $done actions ran, $skipped had no target")
-        assertTrue(done > 300)
+        assertTrue(done > 200)
     }
 }

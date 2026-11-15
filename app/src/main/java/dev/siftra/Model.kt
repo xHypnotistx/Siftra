@@ -303,9 +303,14 @@ class Siftra(private val ctx: Context) {
 
     val visible get() = apps.filter { it.pkg !in hidden }
 
+    /* ---------- group order (drag to reorder in Settings › Sorting) ---------- */
+    var groupOrder by mutableStateOf(prefs.getString("groupOrder", "")!!.split(',').mapNotNull { n -> Group.entries.firstOrNull { it.name == n } }
+        .let { saved -> saved + Group.entries.filter { it !in saved } }); private set
+    fun saveGroupOrder(list: List<Group>) { groupOrder = list; prefs.edit().putString("groupOrder", list.joinToString(",") { it.name }).apply() }
+
     fun sections(includeExtras: Boolean): List<Pair<Group, List<AppItem>>> {
         val v = visible
-        return Group.entries.filter { includeExtras || it != Group.SAMSUNG_EXTRA }
+        return groupOrder.filter { includeExtras || it != Group.SAMSUNG_EXTRA }
             .mapNotNull { g -> v.filter { groupOf[it.key] == g }.takeIf { it.isNotEmpty() }?.let { g to it } }
     }
 
@@ -314,10 +319,31 @@ class Siftra(private val ctx: Context) {
 
     fun launch(a: AppItem, bounds: Rect?) {
         try { la.startMainActivity(a.component, a.user, bounds, null) } catch (_: Exception) { return }
+        recordLaunch(a)
+    }
+
+    /* ---------- launch history (dated, on-device only; kept 60 days) ---------- */
+    private val historyFile = java.io.File(ctx.filesDir, "launches.json")
+    private val history: MutableMap<String, MutableList<Long>> = try {
+        val j = JSONObject(historyFile.readText())
+        j.keys().asSequence().associateWith { k -> j.getJSONArray(k).let { arr -> (0 until arr.length()).map { arr.getLong(it) }.toMutableList() } }.toMutableMap()
+    } catch (_: Exception) { mutableMapOf() }
+    var historyTick by mutableStateOf(0); private set
+
+    fun recordLaunch(a: AppItem, at: Long = System.currentTimeMillis()) {
         val n = (counts[a.key] ?: 0) + 1
         counts = counts + (a.key to n)
         prefs.edit().putInt("lc|${a.key}", n).apply()
+        val cutoff = at - 60L * 24 * 3600_000
+        synchronized(history) {
+            history.getOrPut(a.key) { mutableListOf() }.apply { add(at); removeAll { it < cutoff } }
+            val out = JSONObject(); history.forEach { (k, v) -> out.put(k, JSONArray(v)) }
+            try { historyFile.writeText(out.toString()) } catch (_: Exception) {}
+        }
+        historyTick++
     }
+    /** Opens since [since] (epoch ms); 0 = all time (uses the lifetime counter). */
+    fun opens(a: AppItem, since: Long): Int = if (since <= 0) counts[a.key] ?: 0 else synchronized(history) { history[a.key]?.count { it >= since } ?: 0 }
 
     fun isFav(a: AppItem) = a.key in favorites
     fun toggleFav(a: AppItem) {
@@ -325,8 +351,41 @@ class Siftra(private val ctx: Context) {
         prefs.edit().putString("fav", favorites.joinToString("|")).apply()
     }
     fun move(a: AppItem, g: Group) { prefs.edit().putString("ov|${a.pkg}", g.name).apply(); regroup() }
-    fun hide(a: AppItem) { hidden = hidden + a.pkg; prefs.edit().putStringSet("hidden", hidden).apply() }
+    fun hide(a: AppItem) { hidden = hidden + a.pkg; prefs.edit().putStringSet("hidden", hidden).putLong("hid|${a.pkg}", System.currentTimeMillis()).apply() }
+    fun unhide(pkg: String) { hidden = hidden - pkg; prefs.edit().putStringSet("hidden", hidden).remove("hid|$pkg").apply() }
     fun unhideAll() { hidden = emptySet(); prefs.edit().putStringSet("hidden", hidden).apply() }
+    fun hiddenAt(pkg: String) = prefs.getLong("hid|$pkg", 0L)
+    /** Hidden apps that are still installed, newest first. */
+    fun hiddenApps() = apps.filter { it.pkg in hidden }.distinctBy { it.pkg }.sortedByDescending { hiddenAt(it.pkg) }
+
+    /* ---------- sorting stats ---------- */
+    fun manualMoves() = prefs.all.keys.count { it.startsWith("ov|") }
+    /** (sorted by on-device rules, placed by Gemini, moved by you) */
+    fun sortStats(): Triple<Int, Int, Int> {
+        var rules = 0; var ai = 0; var manual = 0
+        apps.distinctBy { it.pkg }.forEach { a ->
+            when {
+                override(a) != null -> manual++
+                Rules.of(a) != null -> rules++
+                ai(a) != null -> ai++
+                else -> rules++   // fell to Other without Gemini
+            }
+        }
+        return Triple(rules, ai, manual)
+    }
+
+    /* ---------- Gemini key check ---------- */
+    var keyState by mutableStateOf<Boolean?>(null)   // null unknown, true valid, false invalid
+    suspend fun validateKey() {
+        if (geminiKey.isBlank()) { keyState = null; return }
+        keyState = withContext(Dispatchers.IO) {
+            try {
+                val c = URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1").openConnection() as HttpURLConnection
+                c.connectTimeout = 10_000; c.readTimeout = 10_000; c.setRequestProperty("x-goog-api-key", geminiKey)
+                c.responseCode in 200..299
+            } catch (_: Exception) { null }
+        }
+    }
     fun appInfo(a: AppItem) { try { la.startAppDetailsActivity(a.component, a.user, null, null) } catch (_: Exception) {} }
     fun saveKey(k: String) { geminiKey = k.trim(); prefs.edit().putString("key", geminiKey).apply() }
     fun setExtras(v: Boolean) { showExtras = v; prefs.edit().putBoolean("extras", v).apply() }

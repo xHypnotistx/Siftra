@@ -110,6 +110,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
     var drawer by remember { mutableStateOf(false) }
     var menuFor by remember { mutableStateOf<AppItem?>(null) }
     var settings by remember { mutableStateOf(false) }
+    var welcomed by remember { mutableStateOf(s.prefs.getBoolean("welcomed", false)) }
     var searchFocus by remember { mutableStateOf(false) }
     val act = androidx.compose.ui.platform.LocalContext.current as MainActivity
     var isHome by remember { mutableStateOf(act.isDefaultHome()) }
@@ -119,7 +120,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
     LaunchedEffect(s.status) { if (s.status.endsWith("✓")) { delay(1800); s.status = "" } }
 
     // Real frosted glass: blur the wallpaper behind the whole window while a panel is open.
-    val overlay = openGroup != null || drawer || settings
+    val overlay = openGroup != null || drawer || settings || !welcomed
     val blur = remember { Animatable(0f) }
     LaunchedEffect(overlay, s.backdrop) {
         blur.animateTo(if (overlay && s.backdrop == Backdrop.WALLPAPER) 36f else 0f, tween(if (overlay) 320 else 220)) { setBlur(value.toInt()) }
@@ -157,10 +158,10 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
         Box(Modifier.fillMaxSize()) {
             if (s.backdrop != Backdrop.WALLPAPER) Canvas(Modifier.fillMaxSize()) { drawBackdrop(env) }
             // dim layer
-            val dim by animateFloatAsState(if (overlay) 0.42f else 0f, tween(260), label = "dim")
+            val dim by animateFloatAsState(if (settings || !welcomed) 0.12f else if (overlay) 0.42f else 0f, tween(260), label = "dim")
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
 
-            val homeAlpha by animateFloatAsState(if (drawer || settings) 0f else if (openGroup != null) 0.3f else 1f, tween(240), label = "ha")
+            val homeAlpha by animateFloatAsState(if (drawer || settings || !welcomed) 0f else if (openGroup != null) 0.3f else 1f, tween(240), label = "ha")
             val homeScale by animateFloatAsState(if (overlay) 0.95f else 1f, springy, label = "hs")
             val homeBlur by animateDpAsState(if (openGroup != null) 14.dp else 0.dp, tween(260), label = "hb")
             val light = s.backdrop == Backdrop.PASTEL
@@ -170,7 +171,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
             CompositionLocalProvider(LocalInk provides ink, LocalUi provides homeUi) {
             Home(
                 s, sts, openGroup, Modifier.graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur)
-                    .then(if (drawer || settings) Modifier.clearAndSetSemantics { } else Modifier),   // hidden home: inert
+                    .then(if (drawer || settings || !welcomed) Modifier.clearAndSetSemantics { } else Modifier),   // hidden home: inert
                 isHome = isHome,
                 onGroup = { lastGroup = it; openGroup = it },
                 onLaunch = ::open, onLong = onLong,
@@ -215,9 +216,16 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                     onOrganize = { scope.launch { s.organize(force = true) } })
             }
 
-            AnimatedVisibility(settings, enter = fadeIn() + scaleIn(initialScale = 0.94f), exit = fadeOut() + scaleOut(targetScale = 0.96f)) {
-                SettingsPanel(s, onClose = { settings = false }, onSetHome = askHome,
-                    onReset = { s.resetMoves() })
+            CompositionLocalProvider(LocalInk provides ink, LocalUi provides homeUi, LocalRowStyle provides s.layout.rowStyle) {
+                AnimatedVisibility(settings, enter = fadeIn(tween(200)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 380f)) { it / 10 },
+                    exit = fadeOut(tween(180)) + slideOutVertically(tween(200)) { it / 12 }) {
+                    SettingsScreen(s, isHome, onClose = { settings = false }, onSetHome = { askHome(); isHome = true })
+                }
+                AnimatedVisibility(!welcomed, enter = fadeIn(), exit = fadeOut(tween(260))) {
+                    WelcomeScreen(s, onSetHome = { askHome(); isHome = true }) {
+                        welcomed = true; s.prefs.edit().putBoolean("welcomed", true).apply()
+                    }
+                }
             }
 
             menuFor?.let { a -> AppMenu(s, a, onClose = { menuFor = null }) }
@@ -526,57 +534,4 @@ private fun ChipRow(items: List<String>, selected: String, onPick: (String) -> U
 @Composable
 private fun MenuRow(t: String, onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp)) { Text(t, 15.sp) }
-}
-
-@Composable
-private fun SettingsPanel(s: Siftra, onClose: () -> Unit, onSetHome: () -> Unit, onReset: () -> Unit) {
-    var key by remember { mutableStateOf(s.geminiKey) }
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    Box(Modifier.fillMaxSize().noRipple { s.saveKey(key); onClose() }, contentAlignment = Alignment.Center) {
-        Column(Modifier.fillMaxWidth(0.88f).heightIn(max = 640.dp).glass(30.dp, dark = true).noRipple { }
-            .verticalScroll(rememberScrollState()).padding(20.dp)) {
-            Text("Siftra", 32.sp, display = true)
-            Text("Open-source launcher that sifts your apps into strata", 12.5.sp, alpha = 0.7f)
-            Spacer(Modifier.height(16.dp))
-            Text("Gemini key (sorts apps the rules can't place)", 13.sp, alpha = 0.8f)
-            Spacer(Modifier.height(6.dp))
-            Box(Modifier.fillMaxWidth().glass(14.dp).padding(12.dp)) {
-                if (key.isEmpty()) Text("Paste API key — optional", 14.sp, alpha = 0.5f)
-                BasicTextField(key, { key = it }, Modifier.fillMaxWidth(), singleLine = true,
-                    textStyle = TextStyle(Color.White, 14.sp), cursorBrush = SolidColor(Color.White))
-            }
-            Text("Get a free key at aistudio.google.com/apikey ↗", 12.sp, alpha = 0.75f,
-                modifier = Modifier.padding(top = 6.dp).clickable {
-                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
-                })
-            Spacer(Modifier.height(10.dp))
-            Text("Home layout", 13.sp, alpha = 0.8f)
-            ChipRow(HomeLayout.entries.map { it.title }, s.layout.title) { t -> s.setHomeLayout(HomeLayout.entries.first { it.title == t }) }
-            Spacer(Modifier.height(10.dp))
-            Text("Backdrop", 13.sp, alpha = 0.8f)
-            val pick = androidx.activity.compose.rememberLauncherForActivityResult(
-                androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { s.setPhoto(it) } }
-            ChipRow(Backdrop.entries.map { it.title }, s.backdrop.title) { t ->
-                val b = Backdrop.entries.first { it.title == t }
-                if (b == Backdrop.PHOTO) pick.launch(androidx.activity.result.PickVisualMediaRequest(
-                    androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
-                else s.setBackdropMode(b)
-            }
-            Text("Glass", 13.sp, alpha = 0.8f, modifier = Modifier.padding(top = 10.dp))
-            ChipRow(listOf("Frosted", "Ribbed"), if (s.ribbed) "Ribbed" else "Frosted") { s.setRibbedGlass(it == "Ribbed") }
-            Spacer(Modifier.height(6.dp))
-            MenuRow((if (s.motion) "☑" else "☐") + "  Animated backdrop") { s.setMotionOn(!s.motion) }
-            Text("Clock  ·  tip: tap the clock to switch", 13.sp, alpha = 0.8f, modifier = Modifier.padding(top = 8.dp))
-            ChipRow(ClockStyle.entries.map { it.title }, s.clockStyle.title) { t -> s.setClock(ClockStyle.entries.first { it.title == t }) }
-            Text("Font", 13.sp, alpha = 0.8f, modifier = Modifier.padding(top = 10.dp))
-            ChipRow(listOf("Classy", "System"), if (s.classy) "Classy" else "System") { s.setClassyFont(it == "Classy") }
-            Spacer(Modifier.height(6.dp))
-            MenuRow((if (s.you) "☑" else "☐") + "  Material You colors") { s.setYouColors(!s.you) }
-            MenuRow((if (s.themed) "☑" else "☐") + "  Themed icons (Material You)") { s.setThemedIcons(!s.themed) }
-            MenuRow((if (s.showExtras) "☑" else "☐") + "  Show Samsung Extras on home") { s.setExtras(!s.showExtras) }
-            MenuRow("↺  Reset my manual moves") { onReset() }
-            MenuRow("◌  Unhide all apps (${s.hidden.size})") { s.unhideAll() }
-            MenuRow("⌂  Set as default home") { onSetHome() }
-        }
-    }
 }

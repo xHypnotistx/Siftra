@@ -134,6 +134,30 @@ class LogicStressTest {
         assertTrue(s.groupOf.values.all { it == Group.OTHER || it in Group.entries })
     }
 
+    @Test fun launchHistoryAndGroupOrder() {
+        val s = loaded(CATALOG.map { it.first })
+        val wa = s.apps.first { it.label == "WhatsApp" }
+        val now = System.currentTimeMillis(); val day = 86_400_000L
+        s.recordLaunch(wa, now - 70 * day)           // older than 60 days → pruned
+        s.recordLaunch(wa, now - 5 * day)
+        s.recordLaunch(wa, now - 3_600_000)
+        s.recordLaunch(wa, now)
+        assertEquals(2, s.opens(wa, now - day))      // today
+        assertEquals(3, s.opens(wa, now - 7 * day))  // this week
+        assertEquals(4, s.opens(wa, 0))              // all time counter
+        val s2 = loaded(CATALOG.map { it.first })
+        assertEquals("history persists", 3, s2.opens(s2.apps.first { it.label == "WhatsApp" }, now - 7 * day))
+        // group order drives section order everywhere
+        val order = listOf(Group.GOOGLE, Group.FINANCE) + Group.entries.filter { it != Group.GOOGLE && it != Group.FINANCE }
+        s2.saveGroupOrder(order)
+        assertEquals(Group.GOOGLE, s2.sections(true).first().first)
+        assertEquals(Group.GOOGLE, loaded(CATALOG.map { it.first }).groupOrder.first())
+        // hidden dates
+        val ak = s2.apps.first { it.label == "Akbank" }
+        s2.hide(ak); assertTrue(s2.hiddenAt(ak.pkg) > 0); assertEquals(ak.pkg, s2.hiddenApps().first().pkg)
+        s2.unhide(ak.pkg); assertTrue(s2.hiddenApps().none { it.pkg == ak.pkg })
+    }
+
     /* ---------- Gemini answer parsing ---------- */
 
     @Test fun geminiParsingIsTolerant() {

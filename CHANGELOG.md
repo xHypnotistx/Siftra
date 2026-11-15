@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.2 (2026-11-15): stage 1 of the concept redesign (Settings + Welcome)
+
+- **Per-layout styling for every new screen.** A shared kit (rows, labels, chips, switches, buttons, icon tiles, line glyphs, layout thumbnails) follows the selected home layout: Index Lime numbered lists, Cards frosted cards, Strata offset layers, Monolith caps and ribbed glass, Orbit light pills.
+- **Settings rebuilt as sections** with smooth page transitions (Back goes up a level):
+  - *Home*: default-home banner plus Look, Home layout, Sorting & Gemini, Apps, About.
+  - *Look*: live mini preview; backdrop, glass, clock and font chips; Material You, themed icons and animated backdrop switches.
+  - *Home layout*: tap a thumbnail of each layout.
+  - *Sorting & Gemini*: counts sorted by rules, by Gemini and by you; Gemini key field that checks the key (Valid / Invalid); drag-to-reorder group order (applies to every layout); Samsung Extras switch; re-sort.
+  - *Apps*: hidden apps with when they were hidden and per-app Unhide; manual moves with Reset.
+  - *About*: version, GitHub, license, fonts.
+- **Welcome (first run).** Three steps: intro with your real top groups, pick a layout, make Siftra your home screen (or "Try it first").
+- **New data, on the phone only.** Dated launch history (60 days, for Today / This week in stage 3), the date each app was hidden, and a saved group order.
+- **Tests.** Settings test walks every page and control and checks drag-to-reorder. New Welcome flow test and launch-history / group-order test. All 21 pass.
+
 ## 0.5.1 (2026-11-15): calmer Index Lime
 
 - **Removed all bouncing and floating text motion.** The Media equalizer, Shopping drop, Social heartbeat and the floating title on an unfolded group are gone. The title still grows to italic when unfolded, now without overshoot.
