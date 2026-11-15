@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 (2026-11-15): calmer Index Lime
+
+- **Removed all bouncing and floating text motion.** The Media equalizer, Shopping drop, Social heartbeat and the floating title on an unfolded group are gone. The title still grows to italic when unfolded, now without overshoot.
+- **Living colors only on interaction.** Google's rotating colors, the glints, the iridescent sheen, the Games glitch, the pixel flicker and the Productivity cursor run only while a group is unfolded, armed or being dragged. Otherwise each group shows calm, still colors (for example Google's four colors fixed per letter, and Turkish red).
+- **Softer entrance.** Letters rise less, with no tilt and a lighter blur.
+- **Battery.** The animation clock now runs only while a group is being interacted with, so the home screen is fully still when idle.
+
 ## 0.5.0 (2026-11-15): Index Lime
 
 Index is now **Index Lime**, which replaces the grey Index.

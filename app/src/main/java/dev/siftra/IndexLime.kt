@@ -90,7 +90,29 @@ private fun hash(i: Int, k: Int) = frac(sin(i * 12.9898f + k * 78.233f) * 43758.
 private fun bell(x: Float, c: Float, w: Float) = max(0f, 1f - abs(x - c) / w)
 private fun glitch(t: Float) = frac(t / 4f + 0.5f) < 0.04f   // brief flicker every 4 s, never at start
 
-private fun themeColor(g: Group, i: Int, n: Int, t: Float, lead: Boolean): Color = when (g) {
+/** Calm, still colours used while a group is not being interacted with. */
+private fun staticColor(g: Group, i: Int, n: Int): Color {
+    val k = if (n > 1) i / (n - 1f) else 0f
+    return when (g) {
+        Group.MINE -> Lime
+        Group.GOV -> TrRed
+        Group.INSPIRE -> Color.hsv((260f + k * 120f) % 360f, 0.28f, 1f)
+        Group.SAMSUNG -> Color(0xFF5B83FF)
+        Group.GOOGLE -> G4[i % 4]
+        Group.SOCIAL -> lerp(Color(0xFFFF4F8B), Color(0xFFFF9A3D), k)
+        Group.MEDIA -> lerp(Color(0xFFE040FB), Color(0xFF8E7CFF), k)
+        Group.GAMES -> Color(0xFF3DF5FF)
+        Group.FINANCE -> Color(0xFF2ED38A)
+        Group.SHOPPING -> Color(0xFFFF9A3D)
+        Group.TRAVEL -> lerp(Color(0xFF6EC8FF), Color(0xFFFF7A59), k)
+        Group.PRODUCTIVITY -> LimeInk
+        Group.TOOLS -> Color(0xFFA9B1BC)
+        Group.OTHER, Group.SAMSUNG_EXTRA -> Muted
+    }
+}
+
+/** Living colours — only while the group is unfolded, armed or being dragged. */
+private fun themeColor(g: Group, i: Int, n: Int, t: Float, lead: Boolean): Color = if (!lead) staticColor(g, i, n) else when (g) {
     Group.MINE -> Lime
     Group.GOV -> lerp(TrRed, Color.White, bell(frac(t / 3.6f - i * 0.025f), 0.75f, 0.09f))
     Group.INSPIRE -> Color.hsv((t * 24f + i * 22f) % 360f, 0.30f, 1f)
@@ -107,25 +129,17 @@ private fun themeColor(g: Group, i: Int, n: Int, t: Float, lead: Boolean): Color
     }
     Group.PRODUCTIVITY -> LimeInk
     Group.TOOLS -> lerp(Color(0xFFA9B1BC), Color.White, bell(frac(t / 2.8f - i * 0.04f), 0.6f, 0.08f))
-    Group.OTHER, Group.SAMSUNG_EXTRA -> if (lead) Lime else Muted
+    Group.OTHER, Group.SAMSUNG_EXTRA -> Lime
 }
 
-private fun themeDy(g: Group, i: Int, t: Float, lead: Boolean): Float {   // in dp
-    var dy = if (lead) -sin(t * 2.4f + i * 0.35f) * 3f else 0f
-    if (g == Group.MEDIA) dy += -abs(sin(t * 6f + i * 0.9f)) * 3f
-    if (g == Group.SHOPPING) { val ph = frac(t / 3f - i * 0.04f); if (ph < 0.12f) dy += -sin(ph / 0.12f * PI.toFloat()) * 5f }
-    return dy
-}
-private fun themeDx(g: Group, i: Int, t: Float) = if (g == Group.GAMES && glitch(t)) (hash(i, (t * 30).toInt()) - 0.5f) * 6f else 0f
-private fun themeScale(g: Group, t: Float) =
-    if (g == Group.SOCIAL) { val ph = frac(t / 2.4f); 1f + 0.05f * (bell(ph, 0.05f, 0.05f) + bell(ph, 0.18f, 0.05f)) } else 1f
-private fun themeAlpha(g: Group, i: Int, t: Float) = if (g == Group.MINE && hash(i, (t * 6).toInt()) > 0.93f) 0.35f else 1f
+private fun themeDx(g: Group, i: Int, t: Float, lead: Boolean) = if (lead && g == Group.GAMES && glitch(t)) (hash(i, (t * 30).toInt()) - 0.5f) * 6f else 0f
+private fun themeAlpha(g: Group, i: Int, t: Float, lead: Boolean) = if (lead && g == Group.MINE && hash(i, (t * 6).toInt()) > 0.93f) 0.35f else 1f
 
 /** Group name, letter by letter: rises in on first show, then keeps living in its group's theme. */
 @Composable
 private fun LiveTitle(g: Group, rowIndex: Int, lead: Boolean, t: State<Float>) {
     val ui = LocalUi.current
-    val size by animateFloatAsState(if (lead) 40f else 30f, spring(dampingRatio = 0.8f, stiffness = 380f), label = "ts")
+    val size by animateFloatAsState(if (lead) 40f else 30f, spring(dampingRatio = 1f, stiffness = 300f), label = "ts")
     val style = TextStyle(fontFamily = ui.display, fontSize = size.sp, lineHeight = (size * 1.12f).sp,
         fontStyle = if (lead) FontStyle.Italic else FontStyle.Normal)
     val letters = remember(g) { g.title.map { if (it == ' ') " " else it.toString() } }
@@ -135,19 +149,17 @@ private fun LiveTitle(g: Group, rowIndex: Int, lead: Boolean, t: State<Float>) {
             val rise = remember { Animatable(if (TestHooks.freezeMotion) 1f else 0f) }
             if (!TestHooks.freezeMotion) LaunchedEffect(Unit) {
                 delay((140 + rowIndex * 70 + i * 28).toLong())
-                rise.animateTo(1f, tween(760, easing = CubicBezierEasing(0.2f, 0.85f, 0.25f, 1f)))
+                rise.animateTo(1f, tween(600, easing = CubicBezierEasing(0.2f, 0.85f, 0.25f, 1f)))
             }
             BasicText(ch, Modifier.graphicsLayer {
                 val p = rise.value; val tt = t.value
-                alpha = p * themeAlpha(g, i, tt)
-                translationY = ((1f - p) * 26f + themeDy(g, i, tt, lead)).dp.toPx()
-                translationX = themeDx(g, i, tt).dp.toPx()
-                rotationZ = (1f - p) * 4f
-                val sc = themeScale(g, tt); scaleX = sc; scaleY = sc
-                renderEffect = if (p < 0.99f) BlurEffect((1f - p) * 6.dp.toPx() + 0.01f, (1f - p) * 6.dp.toPx() + 0.01f) else null
+                alpha = p * themeAlpha(g, i, tt, lead)
+                translationY = ((1f - p) * 12f).dp.toPx()                       // soft entrance lift, no bounce
+                translationX = themeDx(g, i, tt, lead).dp.toPx()
+                renderEffect = if (p < 0.99f) BlurEffect((1f - p) * 4.dp.toPx() + 0.01f, (1f - p) * 4.dp.toPx() + 0.01f) else null
             }, style = style, color = { themeColor(g, i, n, t.value, lead) })
         }
-        if (g == Group.PRODUCTIVITY) BasicText("▍", Modifier.graphicsLayer { alpha = if (frac(t.value / 1.06f) < 0.5f) 1f else 0f },
+        if (g == Group.PRODUCTIVITY && lead) BasicText("▍", Modifier.graphicsLayer { alpha = if (frac(t.value / 1.06f) < 0.5f) 1f else 0f },
             style = style, color = { Lime })
     }
 }
@@ -179,10 +191,10 @@ fun IndexLime(
     s: Siftra, sections: List<Pair<Group, List<AppItem>>>, overlay: Boolean,
     onLaunch: (AppItem, Rect?) -> Unit, onLong: (AppItem) -> Unit, conn: NestedScrollConnection, modifier: Modifier,
 ) {
-    val t = rememberMotionTime(true)
     var open by remember { mutableStateOf<Group?>(null) }
     var armed by remember { mutableStateOf<Group?>(null) }
     var dragging by remember { mutableStateOf<Group?>(null) }
+    val t = rememberMotionTime(open != null || armed != null || dragging != null)
     var dragPx by remember { mutableFloatStateOf(0f) }
     var learned by remember { mutableStateOf(s.prefs.getBoolean("dragLearned", false)) }
     val fulls = remember { mutableStateMapOf<Group, Float>() }
