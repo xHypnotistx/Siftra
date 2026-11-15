@@ -120,7 +120,7 @@ private fun SettingsHome(s: Siftra, isHome: Boolean, onClose: () -> Unit, onSetH
     }
 }
 
-object BuildConfigLite { const val VERSION = "0.5.6" }
+object BuildConfigLite { const val VERSION = "0.5.7" }
 
 @Composable
 private fun LookPage(s: Siftra, back: () -> Unit) = Page {

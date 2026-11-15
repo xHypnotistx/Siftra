@@ -404,4 +404,52 @@ class UiStressTest {
         rule.onNodeWithContentDescription("Swipe down").performClick(); rule.waitForIdle()
         assertTrue(s.swipeDown)
     }
+
+    /* ---------- 0.5.7: widget page left of home ---------- */
+
+    @Test fun widgetsPage() {
+        val awm = android.appwidget.AppWidgetManager.getInstance(ctx)
+        val sh = org.robolectric.Shadows.shadowOf(awm)
+        sh.setAllowedToBindAppWidgets(true)
+        val info = android.appwidget.AppWidgetProviderInfo().apply {
+            provider = android.content.ComponentName("com.spotify.music", "com.spotify.music.Widget")
+            minWidth = 250 * 3; minHeight = 110 * 3; initialLayout = android.R.layout.simple_list_item_1
+            @Suppress("DEPRECATION") label = "Spotify player"
+            android.appwidget.AppWidgetProviderInfo::class.java.getField("providerInfo").set(this, android.content.pm.ActivityInfo().apply {
+                packageName = "com.spotify.music"; name = "com.spotify.music.Widget"; nonLocalizedLabel = "Spotify player"
+                applicationInfo = android.content.pm.ApplicationInfo().apply { packageName = "com.spotify.music"; uid = 10123 }
+            })
+        }
+        sh.addInstalledProvider(info)
+        start(HomeLayout.CARDS)
+        val s = model()
+        fun click(t: String) { rule.onAllNodesWithText(t).onLast().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle() }
+        fun tapDesc(d: String) { rule.onAllNodesWithContentDescription(d).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle() }
+        // swipe right from home → widget page
+        rule.onAllNodes(isRoot())[0].performTouchInput { swipeRight(startX = 60f, endX = width - 60f, durationMillis = 300) }
+        rule.waitUntil(5_000) { exists("Add a widget") }
+        shot("widgets-empty")
+        click("Add a widget")
+        rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("Add Spotify player").fetchSemanticsNodes().isNotEmpty() }
+        shot("widget-picker")
+        tapDesc("Add Spotify player")
+        rule.waitUntil(5_000) { s.widgets.size == 1 }
+        val w = s.widgets[0]
+        assertTrue("4-cell wide widget starts full width", w.full)
+        assertTrue(w.height in 90..420)
+        shot("widgets-one")
+        click("Edit")
+        tapDesc("Taller"); assertEquals(w.height + 40, s.widgets[0].height)
+        tapDesc("Half width"); assertFalse(s.widgets[0].full)
+        shot("widgets-edit")
+        tapDesc("Remove widget"); assertTrue(s.widgets.isEmpty())
+        // saved list survives a restart of the model
+        s.addWidget(WidgetSlot(77, 160, false))
+        assertEquals(listOf(WidgetSlot(77, 160, false)), Siftra(ctx).widgets.toList())
+        s.removeWidget(77)
+        // Home press returns to the home page
+        scenario.onActivity { a -> MainActivity::class.java.getDeclaredMethod("onNewIntent", android.content.Intent::class.java)
+            .apply { isAccessible = true }.invoke(a, android.content.Intent(android.content.Intent.ACTION_MAIN)) }
+        rule.waitUntil(5_000) { exists("Search apps", ) || rule.onAllNodes(hasText("Search apps", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+    }
 }

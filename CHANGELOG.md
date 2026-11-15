@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.7 — Widgets page
+
+- **A widget page, one swipe right from home.** Any Android widget can live there: weather, music, calendar, notes. The group layouts are untouched.
+  - The Home button and Back both return to home.
+  - Swiping is paused while a group, the drawer or a menu is open.
+- **Widget picker.** Every widget on the phone, grouped by app, with previews, cell sizes and a search field. Work-profile widgets are included.
+  - Adding a widget asks Android for permission only the first time.
+  - Widgets that need setup open their own setup screen. Cancelling it removes the widget again.
+- **Sizes and layout.** Widgets start at the size they ask for. Wide ones take the full width, small ones sit two to a row.
+- **Edit mode:** move up or down, make shorter or taller in 40 dp steps, switch between half and full width, or remove.
+- **Housekeeping.** Widgets only update while Siftra is on screen. A widget whose app was removed shows a short note with a Remove button. Widget slots Android still holds from interrupted adds are freed on start.
+- Tests: 28 passing, including the full page flow (swipe to the page, pick, add, edit, remove, restart, Home press).
+
 ## 0.5.6 — Notification dots, swipe down, double-tap to lock
 
 - **Notification dots.** A dot on every app with unread notifications, and a dot next to the count of any group holding one.

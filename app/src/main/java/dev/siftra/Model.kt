@@ -226,6 +226,25 @@ class Siftra(private val ctx: Context) {
     fun setSwipeDownOn(v: Boolean) { swipeDown = v; prefs.edit().putBoolean("swipeDown", v).apply() }
     fun setDoubleTapLockOn(v: Boolean) { doubleTapLock = v; prefs.edit().putBoolean("doubleTapLock", v).apply() }
 
+    // Widget page (0.5.7)
+    val widgets = androidx.compose.runtime.mutableStateListOf<WidgetSlot>().apply { addAll(WidgetSlots.load(prefs.getString("widgets", null))) }
+    private fun saveWidgets() { prefs.edit().putString("widgets", WidgetSlots.save(widgets)).apply() }
+    fun addWidget(w: WidgetSlot) { widgets.removeAll { it.id == w.id }; widgets += w; saveWidgets() }
+    fun removeWidget(id: Int) { widgets.removeAll { it.id == id }; saveWidgets() }
+    fun moveWidget(id: Int, d: Int) {
+        val i = widgets.indexOfFirst { it.id == id }; val j = i + d
+        if (i < 0 || j !in widgets.indices) return
+        widgets.add(j, widgets.removeAt(i)); saveWidgets()
+    }
+    fun resizeWidget(id: Int, dh: Int) {
+        val i = widgets.indexOfFirst { it.id == id }; if (i < 0) return
+        widgets[i] = widgets[i].copy(height = (widgets[i].height + dh).coerceIn(80, 560)); saveWidgets()
+    }
+    fun toggleWidgetWidth(id: Int) {
+        val i = widgets.indexOfFirst { it.id == id }; if (i < 0) return
+        widgets[i] = widgets[i].copy(full = !widgets[i].full); saveWidgets()
+    }
+
     var layout by mutableStateOf(HomeLayout.entries.firstOrNull { it.name == prefs.getString("layout", "CARDS") } ?: HomeLayout.CARDS); private set
     /** Picking a layout also applies its matching backdrop, glass and clock (all still changeable). */
     fun setHomeLayout(l: HomeLayout) {

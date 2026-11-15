@@ -72,8 +72,24 @@ fun Modifier.noRipple(onClick: () -> Unit) = composed {
 
 val springy = spring<Float>(dampingRatio = 0.78f, stiffness = 420f)
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), WidgetConfigurator {
     private lateinit var s: Siftra
+    private var configDone: ((Boolean) -> Unit)? = null
+
+    /** Runs a widget's own setup screen (only Android may start it for us) and reports whether it was finished. */
+    override fun configureWidget(id: Int, done: (Boolean) -> Unit) {
+        configDone = done
+        try { WidgetHost.get(this).startAppWidgetConfigureActivityForResult(this, id, 0, REQ_WIDGET_SETUP, null) }
+        catch (_: Exception) { configDone = null; done(true) }
+    }
+
+    @Deprecated("Widget setup results only arrive here")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQ_WIDGET_SETUP) { configDone?.invoke(resultCode == RESULT_OK); configDone = null; return }
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    private companion object { const val REQ_WIDGET_SETUP = 0x5175 }
     private val homePressed = mutableStateOf(0)
 
     override fun onCreate(b: Bundle?) {
@@ -122,6 +138,11 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
     var isHome by remember { mutableStateOf(act.isDefaultHome()) }
 
     LaunchedEffect(s.reloadTick) { s.load() }
+    val homePager = rememberPagerState(initialPage = 1) { 2 }          // page 0 = widgets, page 1 = home
+    LaunchedEffect(homePressed) { homePager.animateScrollToPage(1) }
+    WidgetHostLifecycle()
+    val widgetCtx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { WidgetHost.cleanOrphans(widgetCtx, s.widgets.map { it.id }.toSet()) }
     LaunchedEffect(homePressed) { openGroup = null; drawer = false; menuFor = null; settings = false; moveFor = null; editGroup = null; s.progressVisible = false }
     LaunchedEffect(s.status) { if (s.status.endsWith("✓")) { delay(1800); s.status = "" } }
 
@@ -177,9 +198,12 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
             val homeUi = remember(ui, light, lime) { if (lime) limeTheme(ui) else if (light) lightVariant(ctxT, ui) else ui }
             val ink = if (lime) LimeInk else if (light) Color(0xFF231D4F) else Color.White
             CompositionLocalProvider(LocalInk provides ink, LocalUi provides homeUi) {
-            Home(
-                s, sts, openGroup, Modifier.graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur)
+            HorizontalPager(homePager, Modifier.fillMaxSize().graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur)
                     .then(if (drawer || settings || !welcomed) Modifier.clearAndSetSemantics { } else Modifier),   // hidden home: inert
+                beyondViewportPageCount = 1, userScrollEnabled = !overlay && menuFor == null) { page ->
+            if (page == 0) WidgetsPage(s) { scope.launch { homePager.animateScrollToPage(1) } }
+            else Home(
+                s, sts, openGroup, Modifier,
                 isHome = isHome,
                 onGroup = { lastGroup = it; openGroup = it },
                 onGroupLong = { editGroup = it },
@@ -191,6 +215,8 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                 overlay = overlay,
             )
             }
+            }
+            BackHandler(homePager.currentPage == 0 && !overlay && menuFor == null) { scope.launch { homePager.animateScrollToPage(1) } }
 
             // group panel (container-transforms out of its card)
             with(sts) {
