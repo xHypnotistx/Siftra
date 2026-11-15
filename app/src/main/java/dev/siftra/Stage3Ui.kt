@@ -22,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import kotlinx.coroutines.launch
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -326,6 +328,13 @@ fun GeminiSortingScreen(s: Siftra, onHide: () -> Unit) {
     val ui = LocalUi.current
     BackHandler(onBack = onHide)
     val frac by animateFloatAsState(if (pr.total == 0) 1f else pr.done / pr.total.toFloat(), tween(500), label = "ring")
+    val env = LocalGlass.current
+    val scope = rememberCoroutineScope()
+    // its own backdrop, so whatever it was opened from (Settings, the drawer) doesn't show through
+    Box(Modifier.fillMaxSize().then(
+        if (env != null && env.mode != Backdrop.WALLPAPER) Modifier.drawBehind { drawBackdrop(env); drawRect(Color.Black.copy(alpha = 0.12f)) }
+        else Modifier.background(Color(0xF2101114))
+    ).noRipple { })
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp).padding(top = 14.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { SBack(onHide); Spacer(Modifier.weight(1f)) }
@@ -356,6 +365,10 @@ fun GeminiSortingScreen(s: Siftra, onHide: () -> Unit) {
             }
             if (pr.rows.size > shown.size) T("+ ${pr.rows.size - shown.size} more", 12.sp, Modifier.padding(top = 8.dp), color = muted())
         }
-        SButton(if (pr.running) "Run in background" else "Done", !pr.running) { onHide() }
+        if (pr.error != null && !pr.running) {
+            T("Apps already placed keep their group. Retry continues with the rest.", 12.5.sp, color = muted(), center = true)
+            SButton("Retry", true, "refresh") { scope.launch { s.organize(force = false, show = true) } }
+            SButton("Close", false) { onHide() }
+        } else SButton(if (pr.running) "Run in background" else "Done", !pr.running) { onHide() }
     }
 }

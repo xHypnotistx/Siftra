@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.10 — Gemini sorting fix
+
+- **Fixed: "timeout" when sorting with a free Gemini key.**
+  - Requests now ask the model not to "think" first. Classifying app names doesn't need it, and on the free tier it made answers too slow. Models that can't turn thinking off fall back automatically.
+  - Requests wait up to 90 seconds instead of 60.
+  - A batch that still times out is retried as two smaller halves.
+  - "Too many requests" and "busy" answers are retried once after a short wait.
+- **Clear error messages** (no answer in time, no internet, free limit reached, key rejected) and a **Retry** button. Retry continues with the apps not yet placed; the ones already placed keep their group.
+- **Fixed: the sorting screen was see-through** when opened from Settings. It now has its own backdrop.
+
 ## 0.5.9 — Polish & fixes
 
 - **Fixed: the widget swipe could leave home frozen.** Home used to sit inside a lazily composed pager. In long test runs it sometimes stopped reacting once apps finished loading: the model was ready, but the screen kept showing the empty first frame. Home and the widget page are now two plain pages in a custom swipe container. Both stay composed and nothing is lazy. Six full test runs with no stall since, against stalls in five of the nine runs before.

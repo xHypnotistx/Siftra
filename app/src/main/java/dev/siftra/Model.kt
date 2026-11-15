@@ -168,7 +168,7 @@ object Rules {
 /* ======================= Gemini (unknown apps only) ======================= */
 
 object Gemini {
-    fun classify(key: String, model: String, apps: List<AppItem>): Map<String, Group> {
+    fun classify(key: String, model: String, apps: List<AppItem>, quick: Boolean = true): Map<String, Group> {
         val prompt = buildString {
             appendLine("Sort these Android apps into exactly one group each.")
             appendLine("Groups: GOV=official government/public services, INSPIRE=visual inspiration & moodboards, SOCIAL, MEDIA=video/music/news/photo, GAMES, FINANCE=banking/payments/crypto, SHOPPING=shops/food delivery/marketplaces, TRAVEL=maps/transport/flights/hotels, PRODUCTIVITY=work/notes/office/AI assistants, TOOLS=utilities/system/settings, OTHER.")
@@ -180,15 +180,22 @@ object Gemini {
         val body = JSONObject()
             .put("contents", JSONArray().put(JSONObject().put("role", "user")
                 .put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
-            .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
+            .put("generationConfig", JSONObject().put("responseMimeType", "application/json").apply {
+                // sorting needs no long reasoning; "thinking" models can otherwise take minutes on the free tier
+                if (quick) put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
+            })
         val c = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent").openConnection() as HttpURLConnection
-        c.requestMethod = "POST"; c.connectTimeout = 15_000; c.readTimeout = 60_000; c.doOutput = true
+        c.requestMethod = "POST"; c.connectTimeout = 20_000; c.readTimeout = 90_000; c.doOutput = true
         c.setRequestProperty("Content-Type", "application/json"); c.setRequestProperty("x-goog-api-key", key)
         c.outputStream.use { it.write(body.toString().toByteArray()) }
         val code = c.responseCode
         val txt = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText().orEmpty()
         val j = try { JSONObject(txt) } catch (_: Exception) { JSONObject() }
-        if (code !in 200..299) throw IOException(j.optJSONObject("error")?.optString("message") ?: "HTTP $code")
+        if (code !in 200..299) {
+            val msg = j.optJSONObject("error")?.optString("message") ?: "HTTP $code"
+            if (quick && code == 400 && msg.contains("think", true)) return classify(key, model, apps, quick = false)   // model without that switch
+            throw GeminiError(code, msg)
+        }
         val parts = j.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
             ?: throw IOException("Empty answer")
         val text = (0 until parts.length()).mapNotNull { parts.optJSONObject(it) }
@@ -209,6 +216,18 @@ object Gemini {
             app.pkg to (allowed.firstOrNull { it.name == v || it.name == v.uppercase() } ?: Group.OTHER)
         }
     }
+}
+
+class GeminiError(val code: Int, msg: String) : IOException(msg)
+
+/** Plain words for what went wrong talking to Gemini. */
+fun geminiProblem(e: Throwable): String = when {
+    e is java.net.SocketTimeoutException || e.message.equals("timeout", true) -> "Gemini didn't answer in time"
+    e is java.net.UnknownHostException || e is java.net.ConnectException -> "No internet connection"
+    e is GeminiError && e.code == 429 -> "Free Gemini limit reached for now. Wait a minute, then retry"
+    e is GeminiError && e.code in 500..599 -> "Gemini is busy right now. Try again shortly"
+    e is GeminiError && (e.code == 400 || e.code == 403) && e.message.orEmpty().contains("key", true) -> "Gemini rejected the API key"
+    else -> e.message ?: "Gemini failed"
 }
 
 /** Apps per Gemini request: one call covers a typical batch of new installs. */
@@ -470,16 +489,28 @@ class Siftra(private val ctx: Context) {
         if (unknown.isNotEmpty() && geminiKey.isNotBlank()) {
             val pr = SortProgress(unknown.map { it.label }); progress = pr; progressVisible = show
             status = if (show) "" else "Gemini is sorting ${unknown.size} app${if (unknown.size > 1) "s" else ""}…"
+            val model = prefs.getString("model", "gemini-flash-latest")!!
+            /** One request, retried once: smaller halves after a timeout, a short wait after "busy" or "too many". */
+            suspend fun ask(batch: List<AppItem>): Map<String, Group> = try {
+                withContext(Dispatchers.IO) { Gemini.classify(geminiKey, model, batch) }
+            } catch (e: java.net.SocketTimeoutException) {
+                if (batch.size == 1) withContext(Dispatchers.IO) { Gemini.classify(geminiKey, model, batch) }
+                else batch.chunked((batch.size + 1) / 2).flatMap { withContext(Dispatchers.IO) { Gemini.classify(geminiKey, model, it) }.toList() }.toMap()
+            } catch (e: GeminiError) {
+                if (e.code != 429 && e.code !in 500..599) throw e
+                kotlinx.coroutines.delay(8_000)
+                withContext(Dispatchers.IO) { Gemini.classify(geminiKey, model, batch) }
+            }
             try {
                 unknown.chunked(GEMINI_BATCH).forEachIndexed { b, batch ->
-                    val res = withContext(Dispatchers.IO) { Gemini.classify(geminiKey, prefs.getString("model", "gemini-flash-latest")!!, batch) }
+                    val res = ask(batch)
                     prefs.edit().apply { res.forEach { (p, g) -> putString("ai|$p", g.name) } }.apply()
                     batch.forEachIndexed { k, a -> pr.rows[b * GEMINI_BATCH + k] = a.label to (res[a.pkg] ?: Group.OTHER) }
                     pr.done += batch.size
                     regroup()
                 }
                 status = if (show) "" else "Sorted ✓"
-            } catch (e: Exception) { pr.error = e.message ?: "Gemini failed"; status = "Gemini: ${e.message}" }
+            } catch (e: Exception) { val why = geminiProblem(e); pr.error = why; status = "Gemini: $why" }
             pr.running = false
         } else status = when {
             unknown.isEmpty() -> "Everything is sorted ✓"
