@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.5 — Speed & battery
+
+- **Glass is much cheaper to draw.** The backdrop is blurred once, at quarter size, and every glass panel samples that copy. Before, each card, row and sheet blurred its own piece of the backdrop on every frame. The frosted/ribbed texture still runs per panel at full sharpness, with a lighter noise function.
+- **No more endless 120 Hz redraws.**
+  - The animated backdrop now steps 30 times a second (its blobs drift over ~48 s, so it looks the same). Between steps the phone can drop to a low refresh rate.
+  - The Minimal clock's blinking colon (the Index Lime default) repainted on every frame, even with motion off. It now repaints once a second.
+  - Index Lime's living group colours run at up to 60 fps while a group is open, and at full speed only while you drag.
+- **Fast cold start.** App names and icons are kept on the phone and reused until an app is updated, so starting Siftra no longer opens every installed APK. Installing, updating or removing one app now reads only that app instead of all of them. Apps that do need reading are read in parallel, with one icon load per app instead of two.
+- Icons from the cache go straight into GPU memory, so scrolling the drawer doesn't upload them and they take less RAM.
+- Siftra's own code is now precompiled on install (baseline profile).
+- Settings › Apps › **App icons & names › Refresh** rebuilds the cache, for example after changing the icon style in phone settings. About shows how the last start was served.
+- Tests: 25 passing, including an icon cache round trip (reuse, update, uninstall cleanup, invalidation, corrupt index).
+
 ## 0.5.4 — Concept redesign, stage 3: groups, shelf pages, Gemini progress
 
 - **New long-press app menu.** A themed bottom sheet replaces the old pop-up. It shows the app's group and how many times you opened it this week, five actions (Favorite, Move, Hide, Info, Uninstall), and the app's own shortcuts with their icons. Shortcuts only appear while Siftra is your default home.

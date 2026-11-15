@@ -2,6 +2,7 @@ package dev.siftra
 
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
+import androidx.compose.ui.graphics.asImageBitmap
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -194,5 +195,35 @@ class LogicStressTest {
         val keys = s4.apps.take(3).map { it.key }
         s4.saveFavorites(keys.reversed())
         assertEquals(keys.reversed(), loaded(CATALOG.map { it.first }).favoriteApps().map { it.key })
+    }
+
+    @Test fun iconCacheRoundTripUpdatesAndCleanup() {
+        val dir = java.io.File(ctx.cacheDir, "icons-test").apply { deleteRecursively() }
+        val c = IconCache(ctx, 96, dir)
+        fun item(pkg: String, stamp: String, mono: Boolean = false): AppItem {
+            val b = android.graphics.Bitmap.createBitmap(96, 96, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF3366FF.toInt()) }
+            val base = app(pkg, pkg.split('.')[1].replaceFirstChar { it.uppercase() })
+            return AppItem(base.key, base.pkg, base.label, b.asImageBitmap(), base.component, base.user, base.info,
+                if (mono) b.asImageBitmap() else null, stamp)
+        }
+        val a = item("com.one.app", "/data/app/one-1", mono = true); val b = item("com.two.app", "/data/app/two-1")
+        c.write(listOf(a, b))
+        val meta = c.read()
+        assertEquals(setOf(a.key, b.key), meta.keys)
+        assertEquals("One", meta[a.key]!!.label); assertEquals("/data/app/one-1", meta[a.key]!!.stamp)
+        val (icon, mono) = c.decode(meta[a.key]!!)!!
+        assertEquals(96, icon.width); assertNotNull(mono); assertNull(c.decode(meta[b.key]!!)!!.second)
+        // update one app, uninstall the other → its files go away
+        val a2 = item("com.one.app", "/data/app/one-2")
+        c.write(listOf(a2))
+        assertEquals("/data/app/one-2", c.read()[a.key]!!.stamp)
+        assertTrue(c.read()[b.key] == null)
+        assertFalse(dir.listFiles()!!.any { it.name.startsWith(IconCache.fileName(b.key)) })
+        // a different icon size invalidates everything
+        assertTrue(IconCache(ctx, 120, dir).read().isEmpty())
+        // corrupt index is ignored, not a crash
+        java.io.File(dir, "index.json").writeText("{nope")
+        assertTrue(c.read().isEmpty())
+        dir.deleteRecursively()
     }
 }

@@ -16,6 +16,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -48,7 +50,19 @@ class GlassEnv(
     val mode: Backdrop, val photo: ImageBitmap?, val ribbed: Boolean,
     val time: State<Float>, val screen: State<Size>,
     val you: List<Color> = emptyList(), val youBase: Color = Color.Black,
+    /** The backdrop, pre-blurred once at 1/[SHARED_SCALE] size; every glass panel samples it instead of blurring its own copy. */
+    val shared: GraphicsLayer? = null,
 )
+
+const val SHARED_SCALE = 4f
+
+/** Called by the screen-wide backdrop each time it repaints: refreshes the shared blurred copy. */
+fun DrawScope.recordSharedBackdrop(env: GlassEnv) {
+    val layer = env.shared ?: return
+    val w = (size.width / SHARED_SCALE).toInt().coerceAtLeast(1); val h = (size.height / SHARED_SCALE).toInt().coerceAtLeast(1)
+    layer.renderEffect = blurEffect(env.ribbed, density)
+    layer.record(this, layoutDirection, IntSize(w, h)) { scale(1f / SHARED_SCALE, 1f / SHARED_SCALE, Offset.Zero) { drawBackdrop(env) } }
+}
 
 val LocalGlass = staticCompositionLocalOf<GlassEnv?> { null }
 
@@ -83,7 +97,7 @@ uniform shader content;
 uniform float strength;
 uniform float ribbed;
 uniform float rib;
-float h(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
+float h(float2 p) { float3 q = fract(float3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 float n(float2 p) {
     float2 i = floor(p); float2 f = fract(p); float2 u = f * f * (3.0 - 2.0 * f);
     return mix(mix(h(i), h(i + float2(1.0, 0.0)), u.x), mix(h(i + float2(0.0, 1.0)), h(i + float2(1.0, 1.0)), u.x), u.y);
@@ -107,22 +121,24 @@ half4 main(float2 xy) {
 }
 """
 
-private val effects = HashMap<String, RenderEffect>()
+private val effects = HashMap<String, RenderEffect?>()
 
-private fun glassEffect(ribbed: Boolean, density: Float): RenderEffect = effects.getOrPut("$ribbed$density") {
-    val blurPx = (if (ribbed) 7f else 13f) * density
-    val blur = android.graphics.RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP)
+/** Blur for the shared, quarter-size backdrop (radius scaled down to match). */
+private fun blurEffect(ribbed: Boolean, density: Float): RenderEffect = effects.getOrPut("b$ribbed$density") {
+    val r = (if (ribbed) 7f else 13f) * density / SHARED_SCALE
+    android.graphics.RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP).asComposeRenderEffect()
+}!!
+
+/** Per-panel frosted/ribbed distortion + grain at full resolution (Android 13+); null = plain blur. */
+private fun distortEffect(ribbed: Boolean, density: Float): RenderEffect? = effects.getOrPut("d$ribbed$density") {
     if (Build.VERSION.SDK_INT >= 33) try {
         val sh = RuntimeShader(GLASS_AGSL).apply {
             setFloatUniform("strength", (if (ribbed) 9f else 4f) * density)
             setFloatUniform("ribbed", if (ribbed) 1f else 0f)
             setFloatUniform("rib", 14f * density)
         }
-        android.graphics.RenderEffect.createChainEffect(
-            android.graphics.RenderEffect.createRuntimeShaderEffect(sh, "content"), blur
-        ).asComposeRenderEffect()
-    } catch (_: Throwable) { blur.asComposeRenderEffect() }
-    else blur.asComposeRenderEffect()
+        android.graphics.RenderEffect.createRuntimeShaderEffect(sh, "content").asComposeRenderEffect()
+    } catch (_: Throwable) { null } else null
 }
 
 /* ======================= the glass modifier ======================= */
@@ -153,7 +169,7 @@ fun Modifier.glass(r: Dp = 26.dp, strong: Boolean = false, dark: Boolean = false
     val wash = if (ui.you) ui.accent.copy(alpha = 0.07f) else Color.Transparent
     val rim = if (light) Brush.verticalGradient(listOf(Color(0xA6FFFFFF), Color(0x40FFFFFF))) else if (ui.you) Brush.verticalGradient(listOf(ui.soft.copy(alpha = 0.55f), Color(0x14FFFFFF))) else edge
     val shape = RoundedCornerShape(r)
-    val real = env != null && env.mode != Backdrop.WALLPAPER && (env.mode != Backdrop.PHOTO || env.photo != null)
+    val real = env?.shared != null && env.mode != Backdrop.WALLPAPER && (env.mode != Backdrop.PHOTO || env.photo != null)
     val tint = when {
         light && !dark -> Brush.verticalGradient(listOf(Color(0x6BFFFFFF), Color(0x29FFFFFF)))
         dark && real -> Brush.verticalGradient(listOf(Color(0x59000000), Color(0x73000000)))
@@ -168,11 +184,12 @@ fun Modifier.glass(r: Dp = 26.dp, strong: Boolean = false, dark: Boolean = false
         var pos by remember { mutableStateOf(Offset.Zero) }
         clipped.onGloballyPositioned { pos = it.positionInWindow() }.drawWithCache {
             val layer = obtainGraphicsLayer()
-            layer.renderEffect = glassEffect(env!!.ribbed, density)
+            layer.renderEffect = distortEffect(env!!.ribbed, density)
+            val shared = env.shared!!
             onDrawBehind {
                 val p = pos
                 layer.record(this, layoutDirection, IntSize(size.width.toInt().coerceAtLeast(1), size.height.toInt().coerceAtLeast(1))) {
-                    translate(-p.x, -p.y) { drawBackdrop(env) }
+                    translate(-p.x, -p.y) { scale(SHARED_SCALE, SHARED_SCALE, Offset.Zero) { drawLayer(shared) } }
                 }
                 drawLayer(layer)
                 drawRect(tint); drawRect(wash); drawRect(sheen); drawRect(grain, alpha = 0.6f)

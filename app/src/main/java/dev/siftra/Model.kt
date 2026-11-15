@@ -18,6 +18,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -62,7 +66,7 @@ class Group private constructor(val name: String, title: String, val custom: Boo
 class AppItem(
     val key: String, val pkg: String, val label: String, val icon: ImageBitmap,
     val component: ComponentName, val user: UserHandle, val info: ApplicationInfo,
-    val mono: ImageBitmap? = null,
+    val mono: ImageBitmap? = null, val stamp: String = "",
 )
 
 /* ======================= Rules ======================= */
@@ -255,44 +259,94 @@ class Siftra(private val ctx: Context) {
         loadPhoto()
         counts = prefs.all.filterKeys { it.startsWith("lc|") }.mapNotNull { (k, v) -> (v as? Int)?.let { k.drop(3) to it } }.toMap()
         la.registerCallback(object : LauncherApps.Callback() {
-            override fun onPackageRemoved(p: String?, u: UserHandle?) = reloadSoon()
-            override fun onPackageAdded(p: String?, u: UserHandle?) = reloadSoon()
-            override fun onPackageChanged(p: String?, u: UserHandle?) = reloadSoon()
-            override fun onPackagesAvailable(p: Array<out String>?, u: UserHandle?, r: Boolean) = reloadSoon()
-            override fun onPackagesUnavailable(p: Array<out String>?, u: UserHandle?, r: Boolean) = reloadSoon()
+            override fun onPackageRemoved(p: String?, u: UserHandle?) = changed(p)
+            override fun onPackageAdded(p: String?, u: UserHandle?) = changed(p)
+            override fun onPackageChanged(p: String?, u: UserHandle?) = changed(p)
+            override fun onPackagesAvailable(p: Array<out String>?, u: UserHandle?, r: Boolean) = changed(*p.orEmpty())
+            override fun onPackagesUnavailable(p: Array<out String>?, u: UserHandle?, r: Boolean) = changed(*p.orEmpty())
         }, Handler(Looper.getMainLooper()))
     }
 
     var reloadTick by mutableStateOf(0); private set
     private fun reloadSoon() { reloadTick++ }
+    /** Packages whose icon/name must be read again on the next load; everything else is reused. */
+    private val dirty = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private fun changed(vararg p: String?) { p.filterNotNull().forEach { dirty += it }; reloadSoon() }
 
+    private val iconPx by lazy { (56 * ctx.resources.displayMetrics.density).toInt() }
+    internal val iconCache by lazy { IconCache(ctx, iconPx) }
+    private val io = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    private val cacheLock = kotlinx.coroutines.sync.Mutex()
+    /** How the last load was served, for tests and the About page. */
+    var lastLoad = ""; private set
+
+    /**
+     * Lists every launchable app (one cheap system call per profile), then fills in names and icons from
+     * memory, then the disk cache, and only opens the APK for apps that are new or were updated.
+     */
     suspend fun load() {
+        val prev = apps
+        val built = java.util.concurrent.atomic.AtomicInteger(); val fromDisk = java.util.concurrent.atomic.AtomicInteger()
         val list = withContext(Dispatchers.Default) {
             TestHooks.apps?.let { return@withContext it().sortedBy { a -> a.label.lowercase() } }
-            val px = (56 * ctx.resources.displayMetrics.density).toInt()
-            la.profiles.flatMap { u -> la.getActivityList(null, u) }
-                .filter { it.applicationInfo.packageName != ctx.packageName }
-                .map { it.toItem(px) }
-                .sortedBy { it.label.lowercase() }
+            val infos = la.profiles.flatMap { u -> la.getActivityList(null, u) }.filter { it.applicationInfo.packageName != ctx.packageName }
+            val stale = HashSet(dirty).also { dirty.removeAll(it) }
+            val mem = prev.associateBy { it.key }
+            val disk = if (prev.isEmpty()) iconCache.read() else emptyMap()
+            kotlinx.coroutines.coroutineScope {
+                infos.chunked((infos.size / 6).coerceAtLeast(12)).map { chunk ->
+                    async {
+                        chunk.map { inf ->
+                            val key = keyOf(inf); val stamp = inf.applicationInfo.sourceDir.orEmpty()
+                            val pkg = inf.componentName.packageName
+                            val m = mem[key]
+                            if (m != null && m.stamp == stamp && pkg !in stale) return@map m
+                            val d = disk[key]
+                            if (d != null && d.stamp == stamp && pkg !in stale) iconCache.decode(d)?.let { (ic, mo) ->
+                                fromDisk.incrementAndGet()
+                                return@map AppItem(key, pkg, d.label, ic, inf.componentName, inf.user, inf.applicationInfo, mo, stamp)
+                            }
+                            built.incrementAndGet()
+                            inf.toItem(key, stamp)
+                        }
+                    }
+                }.awaitAll().flatten()
+            }.sortedBy { it.label.lowercase() }
         }
+        lastLoad = "${list.size} apps · ${fromDisk.get()} from cache · ${built.get()} read"
         apps = list
         regroup()
+        if (TestHooks.apps == null && (built.get() > 0 || (prev.isNotEmpty() && list.size != prev.size))) saveIcons(list)
         if (geminiKey.isNotBlank() && list.any { needsAi(it) }) organize(force = false)
     }
 
-    private fun LauncherActivityInfo.toItem(px: Int): AppItem {
-        val d = getBadgedIcon(0)
+    private fun saveIcons(list: List<AppItem>) {
+        io.launch { cacheLock.withLock { try { iconCache.write(list) } catch (_: Exception) {} } }
+    }
+
+    /** Settings › Apps: forget every cached icon and name and read them all again. */
+    suspend fun refreshIcons() {
+        cacheLock.withLock { withContext(Dispatchers.IO) { iconCache.clear() } }
+        apps.forEach { dirty += it.pkg }
+        load()
+    }
+
+    private fun keyOf(i: LauncherActivityInfo) = "${i.componentName.flattenToShortString()}#${i.user.hashCode()}"
+
+    private fun LauncherActivityInfo.toItem(key: String, stamp: String): AppItem {
+        val px = iconPx
+        val raw = getIcon(0)                                                  // one resource load per app
+        val d = if (user == android.os.Process.myUserHandle()) raw else ctx.packageManager.getUserBadgedIcon(raw, user)
         val b = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
         d.setBounds(0, 0, px, px); d.draw(Canvas(b))
         // Material You themed icon: the adaptive icon's monochrome layer (Android 13+), framed to the visible area.
         val mono = if (android.os.Build.VERSION.SDK_INT >= 33) try {
-            (getIcon(0) as? android.graphics.drawable.AdaptiveIconDrawable)?.monochrome?.let { md ->
+            (raw as? android.graphics.drawable.AdaptiveIconDrawable)?.monochrome?.let { md ->
                 val mb = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
                 md.setBounds(-px / 4, -px / 4, px + px / 4, px + px / 4); md.draw(Canvas(mb)); mb.asImageBitmap()
             }
         } catch (_: Exception) { null } else null
-        return AppItem("${componentName.flattenToShortString()}#${user.hashCode()}", componentName.packageName,
-            label.toString(), b.asImageBitmap(), componentName, user, applicationInfo, mono)
+        return AppItem(key, componentName.packageName, label.toString(), b.asImageBitmap(), componentName, user, applicationInfo, mono, stamp)
     }
 
     private fun override(a: AppItem) = Group.byName(prefs.getString("ov|${a.pkg}", null))

@@ -167,9 +167,10 @@ fun ClockView(style: ClockStyle, modifier: Modifier = Modifier) {
             }
         }
         ClockStyle.MINIMAL -> Row(modifier, verticalAlignment = Alignment.Bottom) {
-            val bt = rememberMotionTime(true)
+            // one repaint a second instead of every frame
+            val on by produceState(true) { if (!TestHooks.freezeMotion) while (true) { delay(1000); value = !value } }
             T(f("HH"), 34.sp, weight = FontWeight.Medium)
-            T(":", 34.sp, androidx.compose.ui.Modifier.graphicsLayer { alpha = if ((bt.value / 2f) % 1f < 0.5f) 1f else 0.25f },
+            T(":", 34.sp, androidx.compose.ui.Modifier.graphicsLayer { alpha = if (on) 1f else 0.25f },
                 weight = FontWeight.Medium, color = ui.accent)
             T(f("mm"), 34.sp, weight = FontWeight.Medium)
             Spacer(Modifier.width(10.dp))

@@ -66,7 +66,7 @@ fun limeTheme(b: UiTheme) = UiTheme(Lime, Color(0xFFE4FF9A), Color(0xFF1A1D12), 
 
 /** Seconds of animation time. Runs only while the activity is resumed (home visible) — paused otherwise. */
 @Composable
-fun rememberMotionTime(enabled: Boolean): State<Float> {
+fun rememberMotionTime(enabled: Boolean, fps: Int = 0): State<Float> {
     val t = remember { mutableFloatStateOf(0f) }
     val owner = LocalContext.current as? LifecycleOwner
     var resumed by remember { mutableStateOf(owner?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) ?: true) }
@@ -75,10 +75,14 @@ fun rememberMotionTime(enabled: Boolean): State<Float> {
         owner?.lifecycle?.addObserver(obs)
         onDispose { owner?.lifecycle?.removeObserver(obs) }
     }
-    if (enabled && resumed && !TestHooks.freezeMotion) LaunchedEffect(Unit) {
+    if (enabled && resumed && !TestHooks.freezeMotion) LaunchedEffect(fps) {
         val base = t.floatValue
         val start = withFrameNanos { it }
-        while (true) withFrameNanos { t.floatValue = base + (it - start) / 1e9f }
+        val gap = if (fps > 0) 1000L / fps else 0L        // capped: the display can drop to a low refresh rate between steps
+        while (true) {
+            withFrameNanos { t.floatValue = base + (it - start) / 1e9f }
+            if (gap > 0) delay(gap)
+        }
     }
     return t
 }
@@ -196,7 +200,7 @@ fun IndexLime(
     var open by remember { mutableStateOf<Group?>(null) }
     var armed by remember { mutableStateOf<Group?>(null) }
     var dragging by remember { mutableStateOf<Group?>(null) }
-    val t = rememberMotionTime(open != null || armed != null || dragging != null)
+    val t = rememberMotionTime(open != null || armed != null || dragging != null, fps = if (dragging != null) 0 else 60)
     var dragPx by remember { mutableFloatStateOf(0f) }
     var learned by remember { mutableStateOf(s.prefs.getBoolean("dragLearned", false)) }
     val fulls = remember { mutableStateMapOf<Group, Float>() }

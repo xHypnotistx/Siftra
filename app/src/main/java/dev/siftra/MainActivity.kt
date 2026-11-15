@@ -143,11 +143,12 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
 
     val screen = remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
     val animated = s.motion && s.backdrop in setOf(Backdrop.AURORA, Backdrop.YOU, Backdrop.EMBER, Backdrop.MONO, Backdrop.LIME, Backdrop.PASTEL)
-    val time = rememberMotionTime(animated)
+    val time = rememberMotionTime(animated, fps = 30)          // the blobs drift over ~48 s; 30 steps a second is plenty
+    val sharedGlass = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val youCtx = androidx.compose.ui.platform.LocalContext.current
     val env = remember(s.backdrop, s.photo, s.ribbed) {
         fun c(id: Int) = Color(youCtx.getColor(id))
-        GlassEnv(s.backdrop, s.photo, s.ribbed, time, screen,
+        GlassEnv(s.backdrop, s.photo, s.ribbed, time, screen, shared = sharedGlass,
             you = listOf(c(android.R.color.system_accent1_500), c(android.R.color.system_accent3_400),
                 c(android.R.color.system_accent2_400), c(android.R.color.system_accent1_800)),
             youBase = c(android.R.color.system_neutral1_1000))
@@ -159,7 +160,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
     SharedTransitionLayout(Modifier.fillMaxSize().onSizeChanged { screen.value = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }) {
         val sts = this
         Box(Modifier.fillMaxSize()) {
-            if (s.backdrop != Backdrop.WALLPAPER) Canvas(Modifier.fillMaxSize()) { drawBackdrop(env) }
+            if (s.backdrop != Backdrop.WALLPAPER) Canvas(Modifier.fillMaxSize()) { drawBackdrop(env); recordSharedBackdrop(env) }
             // dim layer
             val sorting = s.progressVisible && s.progress != null
             val dim by animateFloatAsState(if (settings || !welcomed || drawer || sorting) 0.14f else if (overlay) 0.42f else 0f, tween(260), label = "dim")

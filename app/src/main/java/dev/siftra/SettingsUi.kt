@@ -85,7 +85,7 @@ fun SettingsScreen(s: Siftra, isHome: Boolean, start: SPage = SPage.HOME, onClos
             SPage.APPS -> AppsPage(s, { page = it }) { page = SPage.HOME }
             SPage.FAVORITES -> FavoritesPage(s) { page = SPage.APPS }
             SPage.MOSTUSED -> MostUsedPage(s) { page = SPage.APPS }
-            SPage.ABOUT -> AboutPage { page = SPage.HOME }
+            SPage.ABOUT -> AboutPage(s) { page = SPage.HOME }
         }
     }
 }
@@ -117,7 +117,7 @@ private fun SettingsHome(s: Siftra, isHome: Boolean, onClose: () -> Unit, onSetH
     }
 }
 
-object BuildConfigLite { const val VERSION = "0.5.4" }
+object BuildConfigLite { const val VERSION = "0.5.5" }
 
 @Composable
 private fun LookPage(s: Siftra, back: () -> Unit) = Page {
@@ -291,10 +291,24 @@ private fun AppsPage(s: Siftra, go: (SPage) -> Unit, back: () -> Unit) = Page {
             T("Reset", 13.sp, Modifier.clip(RoundedCornerShape(10.dp)).clickable { s.resetMoves() }.padding(8.dp), FontWeight.SemiBold, ui.accent)
         }
     }
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    SCard(pad = 14.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                T("App icons & names", 14.sp, weight = FontWeight.SemiBold)
+                T(if (busy) "Reading every app again…" else "Kept on your phone for a fast start. Refresh after changing the icon style in phone settings.",
+                    12.sp, color = muted(), lineHeight = 17.sp)
+            }
+            T("Refresh", 13.sp, Modifier.clip(RoundedCornerShape(10.dp)).clickable(enabled = !busy) {
+                busy = true; scope.launch { s.refreshIcons(); busy = false }
+            }.padding(8.dp), FontWeight.SemiBold, ui.accent)
+        }
+    }
 }
 
 @Composable
-private fun AboutPage(back: () -> Unit) = Page {
+private fun AboutPage(s: Siftra, back: () -> Unit) = Page {
     val ctx = LocalContext.current
     Header("About", back)
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -312,6 +326,7 @@ private fun AboutPage(back: () -> Unit) = Page {
         SRow(4, "heart", "Made by Mahmut", "Istanbul", 0)
     }
     T("No tracking. Most used is counted only on your phone.", 12.sp, Modifier.fillMaxWidth(), color = muted(), center = true)
+    if (s.lastLoad.isNotEmpty()) T("Last start: ${s.lastLoad}", 11.sp, Modifier.fillMaxWidth(), color = muted(), center = true)
 }
 
 /* ======================= first run ======================= */

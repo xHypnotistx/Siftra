@@ -1,0 +1,3 @@
+# Siftra's own code: compile ahead of time on install (the launcher is started cold often).
+HSPLdev/siftra/**;->**(**)**
+Ldev/siftra/**;
