@@ -97,7 +97,7 @@ enum class DrawerView { GROUPS, AZ }
 @Composable
 fun AppDrawer(
     s: Siftra, focusSearch: Boolean, onClose: () -> Unit, onLaunch: (AppItem, Rect?) -> Unit,
-    onLong: (AppItem) -> Unit, onOrganize: () -> Unit, onOpenSettings: (SPage) -> Unit,
+    onLong: (AppItem) -> Unit, onOrganize: () -> Unit, onOpenSettings: (SPage) -> Unit, onGroupLong: (Group) -> Unit = {},
 ) {
     var q by remember { mutableStateOf("") }
     var view by remember { mutableStateOf(DrawerView.entries.firstOrNull { it.name == s.prefs.getString("drawerView", "GROUPS") } ?: DrawerView.GROUPS) }
@@ -126,7 +126,7 @@ fun AppDrawer(
             }
         }
         AnimatedContent(q.isBlank(), transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }, label = "dq") { browsing ->
-            if (browsing) Browse(s, view, { view = it; s.prefs.edit().putString("drawerView", it.name).apply() }, onLaunch, onLong) { q = it }
+            if (browsing) Browse(s, view, { view = it; s.prefs.edit().putString("drawerView", it.name).apply() }, onLaunch, onLong, onGroupLong) { q = it }
             else SearchResults(s, q, launchFromSearch, onLong, onOpenSettings) { q = it }
         }
     }
@@ -154,7 +154,7 @@ private fun SearchField(q: String, onQ: (String) -> Unit, fr: FocusRequester, mo
 
 @Composable
 private fun Browse(s: Siftra, view: DrawerView, setView: (DrawerView) -> Unit, onLaunch: (AppItem, Rect?) -> Unit,
-                   onLong: (AppItem) -> Unit, onRecent: (String) -> Unit) {
+                   onLong: (AppItem) -> Unit, onGroupLong: (Group) -> Unit, onRecent: (String) -> Unit) {
     val ui = LocalUi.current
     val st = LocalRowStyle.current
     val sections = s.sections(true)
@@ -194,7 +194,7 @@ private fun Browse(s: Siftra, view: DrawerView, setView: (DrawerView) -> Unit, o
             }
             LazyColumn(state = listState, contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 24.dp)) {
                 sections.forEachIndexed { gi, (g, list) ->
-                    item(key = "h_${g.name}") { SectionHeader(gi + 1, g.title, list.size, Modifier.animateItem()) }
+                    item(key = "h_${g.name}") { SectionHeader(gi + 1, g.title, list.size, Modifier.animateItem().groupClick({}, { onGroupLong(g) })) }
                     item(key = "g_${g.name}") {
                         Column(Modifier.animateItem().fillMaxWidth().glass(st.radius).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             list.chunked(4).forEach { row ->

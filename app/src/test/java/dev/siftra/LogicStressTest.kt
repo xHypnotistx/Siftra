@@ -169,4 +169,30 @@ class LogicStressTest {
         assertThrows(java.io.IOException::class.java) { Gemini.parse("no json here", apps) }
         assertThrows(Exception::class.java) { Gemini.parse("{broken", apps) }
     }
+
+    @Test fun customGroupsCreateRenameDeletePersist() {
+        val s = loaded(CATALOG.map { it.first })
+        val wa = s.apps.first { it.label == "WhatsApp" }
+        val auto = s.groupOf[wa.key]
+        val g = s.createGroup("  Study ")
+        s.move(wa, g)
+        assertEquals(g, s.groupOf[wa.key]); assertEquals(g, s.groupOrder.last())
+        val s2 = loaded(CATALOG.map { it.first })
+        val g2 = Group.byName(g.name)!!
+        assertEquals("Study", g2.title); assertEquals(g2, s2.groupOf[s2.apps.first { it.label == "WhatsApp" }.key])
+        s2.renameGroup(g2, "Uni")
+        assertEquals("Uni", loaded(CATALOG.map { it.first }).let { Group.byName(g.name)!!.title })
+        val s3 = loaded(CATALOG.map { it.first })
+        s3.deleteGroup(Group.byName(g.name)!!)
+        assertEquals(auto, s3.groupOf[s3.apps.first { it.label == "WhatsApp" }.key])
+        val s4 = loaded(CATALOG.map { it.first })
+        assertNull(Group.byName(g.name)); assertTrue(s4.groupOrder.none { it.custom })
+        // Gemini may answer with a custom group id
+        val g5 = s4.createGroup("Study")
+        assertEquals(g5, Gemini.parse("{\"a.one\":\"${g5.name}\"}", listOf(app("a.one", "One")))["a.one"])
+        // favorites order persists
+        val keys = s4.apps.take(3).map { it.key }
+        s4.saveFavorites(keys.reversed())
+        assertEquals(keys.reversed(), loaded(CATALOG.map { it.first }).favoriteApps().map { it.key })
+    }
 }

@@ -18,6 +18,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +29,12 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.sqrt
 
 enum class HomeLayout(val title: String) { CARDS("Cards"), STRATA("Strata"), MONOLITH("Monolith"), ORBIT("Orbit"), INDEX("Index") }
+
+/** Tap opens the group, long-press opens rename/delete. No ripple (glass shows its own press). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun Modifier.groupClick(onClick: () -> Unit, onLongClick: () -> Unit) = composed {
+    combinedClickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = onClick)
+}
 
 /** Wraps a group's home element so it container-transforms into the open group panel. */
 @Composable
@@ -46,7 +54,7 @@ fun SharedSource(sts: SharedTransitionScope, visible: Boolean, g: Group, modifie
 fun GroupsArea(
     s: Siftra, sts: SharedTransitionScope, openGroup: Group?, sections: List<Pair<Group, List<AppItem>>>,
     onGroup: (Group) -> Unit, onLaunch: (AppItem, Rect?) -> Unit, onLong: (AppItem) -> Unit,
-    conn: NestedScrollConnection, modifier: Modifier, overlay: Boolean = false,
+    conn: NestedScrollConnection, modifier: Modifier, overlay: Boolean = false, onGroupLong: (Group) -> Unit = {},
 ) {
     val ui = LocalUi.current
     val ink = LocalInk.current
@@ -57,7 +65,7 @@ fun GroupsArea(
             itemsIndexed(sections, key = { _, it -> it.first.name }) { i, (g, list) ->
                 val off = listOf(0, 10, 20, 10, 0, 14)[i % 6].dp
                 SharedSource(sts, openGroup != g, g, Modifier.animateItem().padding(start = off, end = 20.dp - off).fillMaxWidth().height(66.dp)) { sm ->
-                    Row(sm.fillMaxSize().glass(22.dp).noRipple { onGroup(g) }.padding(start = 18.dp, end = 14.dp),
+                    Row(sm.fillMaxSize().glass(22.dp).groupClick({ onGroup(g) }, { onGroupLong(g) }).padding(start = 18.dp, end = 14.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Text(g.title, 23.sp, display = true, maxLines = 1)
                         Spacer(Modifier.width(10.dp))
@@ -78,7 +86,7 @@ fun GroupsArea(
             contentPadding = PaddingValues(bottom = 12.dp)) {
             items(sections, key = { it.first.name }) { (g, list) ->
                 SharedSource(sts, openGroup != g, g, Modifier.animateItem().height(150.dp)) { sm ->
-                    Column(sm.fillMaxSize().glass(24.dp).noRipple { onGroup(g) }.padding(16.dp)) {
+                    Column(sm.fillMaxSize().glass(24.dp).groupClick({ onGroup(g) }, { onGroupLong(g) }).padding(16.dp)) {
                         T(g.title.uppercase(), 10.5.sp, weight = FontWeight.SemiBold, alpha = 0.8f, tracking = 2.2.sp, maxLines = 1)
                         Spacer(Modifier.weight(1f))
                         Row(verticalAlignment = Alignment.Bottom) {
@@ -105,7 +113,7 @@ fun GroupsArea(
                     val d: Dp = (84 + 74 * sqrt(list.size.toFloat() / max)).dp
                     val big = d > 112.dp
                     SharedSource(sts, openGroup != g, g, Modifier.size(d)) { sm ->
-                        Column(sm.fillMaxSize().glass(d / 2).noRipple { onGroup(g) }.padding(8.dp),
+                        Column(sm.fillMaxSize().glass(d / 2).groupClick({ onGroup(g) }, { onGroupLong(g) }).padding(8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text(g.title, if (big) 19.sp else 15.sp, display = true, center = true, maxLines = 1)
                             Text("${list.size} apps", 11.sp, FontWeight.SemiBold, color = ui.accent)
@@ -120,7 +128,7 @@ fun GroupsArea(
         }
 
         /* ---------- Index Lime: living editorial list, tap / double-tap-drag to unfold ---------- */
-        HomeLayout.INDEX -> IndexLime(s, sections, overlay, onLaunch, onLong, conn, modifier)
+        HomeLayout.INDEX -> IndexLime(s, sections, overlay, onLaunch, onLong, conn, modifier, onGroupLong)
 
         HomeLayout.CARDS -> {}
     }

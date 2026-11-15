@@ -142,20 +142,22 @@ class UiStressTest {
         // favorite via long-press
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("Instagram")
         rule.onAllNodes(hasText("Instagram") and !hasSetTextAction() and SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnLongClick))[0].performTouchInput { longClick() }
-        rule.onNodeWithText("☆  Add to favorites").performClick()
+        rule.onNodeWithText("Favorite").performClick()
         // hide
         rule.onAllNodes(hasSetTextAction())[0].performTextClearance()
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("Akbank")
         rule.onAllNodes(hasText("Akbank") and !hasSetTextAction() and SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnLongClick))[0].performTouchInput { longClick() }
-        rule.onNodeWithText("◌  Hide").performClick()
+        rule.onNodeWithText("Hide").performClick()
         rule.waitForIdle()
         assertTrue(exists("“Akbank”"))   // hidden → "Nothing called “Akbank”"
         // move
         rule.onAllNodes(hasSetTextAction())[0].performTextClearance()
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("Waze")
         rule.onAllNodes(hasText("Waze") and !hasSetTextAction() and SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnLongClick))[0].performTouchInput { longClick() }
-        rule.onNodeWithText("⇄  Move to group…").performClick()
-        rule.onNodeWithText("○  Games").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.onNodeWithText("Move").performClick()
+        rule.waitUntil(5_000) { exists("Waze to…") }
+        shot("move-sheet")
+        runCatching { rule.onAllNodesWithText("Games").onLast().performScrollTo() }; rule.onAllNodesWithText("Games").onLast().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
         val s = model()
         assertEquals(Group.GAMES, s.groupOf[s.apps.first { it.label == "Waze" }.key])
@@ -309,5 +311,61 @@ class UiStressTest {
         }
         println("monkey: $done actions ran, $skipped had no target")
         assertTrue(done > 200)
+    }
+
+    /* ---------- stage 3: new group from Move, rename/delete via Sorting, Favorites, Most used, Gemini progress ---------- */
+
+    @Test fun groupsFavoritesMostUsedProgress() {
+        start(HomeLayout.CARDS)
+        fun click(t: String) { runCatching { rule.onAllNodesWithText(t).onLast().performScrollTo() }; rule.onAllNodesWithText(t).onLast().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle() }
+        val s = model()
+        val waze = s.apps.first { it.label == "Waze" }
+        val auto = s.groupOf[waze.key]
+        // long-press menu → Move → New group…
+        scenario.onActivity { }; rule.onNodeWithText("︿  All apps").performClick()
+        rule.waitUntil(5_000) { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodes(hasSetTextAction())[0].performTextInput("Waze")
+        rule.onAllNodes(hasText("Waze") and !hasSetTextAction() and SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnLongClick))[0].performTouchInput { longClick() }
+        rule.waitUntil(5_000) { exists("opens this week", ) || rule.onAllNodes(hasText("opens this week", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        shot("app-menu")
+        click("Move"); click("New group…")
+        rule.onNodeWithContentDescription("New group name").performTextInput("Study")
+        click("Create")
+        val g = s.groupOf[waze.key]!!
+        assertTrue(g.custom); assertEquals("Study", g.title); assertTrue(g in s.groupOrder)
+        back(); rule.waitForIdle()
+        // Settings › Sorting: tap the custom group → rename, then delete
+        rule.onNodeWithText("⋯").performClick(); rule.waitUntil(5_000) { exists("Sorting & Gemini") }
+        click("Sorting & Gemini"); rule.waitUntil(5_000) { exists("Study") }
+        click("Study"); rule.waitUntil(5_000) { exists("Your group") }
+        shot("group-edit")
+        rule.onNodeWithContentDescription("Group name").performTextClearance()
+        rule.onNodeWithContentDescription("Group name").performTextInput("Uni")
+        click("Save name"); assertEquals("Uni", g.title)
+        click("Uni"); click("Delete group"); click("Delete")
+        assertEquals(auto, s.groupOf[waze.key]); assertTrue(Group.customs.isEmpty())
+        rule.onAllNodesWithContentDescription("Back")[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle()
+        // Settings › Apps › Favorites and Most used
+        repeat(3) { s.recordLaunch(waze) }; s.recordLaunch(s.apps.first { it.label == "Instagram" })
+        s.toggleFav(waze); s.toggleFav(s.apps.first { it.label == "Instagram" })
+        click("Apps"); rule.waitUntil(5_000) { exists("Most used") }
+        click("Favorites"); rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("Remove Waze").fetchSemanticsNodes().isNotEmpty() }
+        shot("favorites-editor")
+        rule.onNodeWithContentDescription("Remove Waze").performClick(); rule.waitForIdle()
+        assertFalse(s.isFav(waze))
+        click("Add favorites"); rule.onNodeWithContentDescription("Find an app to favorite").performTextInput("Waze")
+        rule.waitForIdle(); click("Waze"); assertTrue(s.isFav(waze))
+        back(); rule.waitUntil(5_000) { exists("Most used") }
+        click("Most used"); rule.waitUntil(5_000) { exists("opens") }
+        listOf("Today", "All time", "This week").forEach { click(it) }
+        shot("most-used")
+        assertTrue(exists("3"))
+        back(); back(); back()
+        // Gemini progress screen (driven directly; no network in tests)
+        rule.runOnIdle { s.progress = Siftra.SortProgress(listOf("Alpha", "Beta")).also { it.rows[0] = "Alpha" to Group.TOOLS; it.done = 1 }; s.progressVisible = true }
+        rule.waitUntil(5_000) { exists("Gemini is sorting") }
+        assertTrue(exists("1/2") && exists("→ Tools") && exists("thinking…"))
+        shot("gemini-progress")
+        click("Run in background"); assertFalse(s.progressVisible)
     }
 }

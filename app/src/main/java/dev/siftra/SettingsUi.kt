@@ -38,12 +38,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.launch
 
-enum class SPage { HOME, LOOK, LAYOUT, SORTING, APPS, ABOUT }
+enum class SPage { HOME, LOOK, LAYOUT, SORTING, APPS, ABOUT, FAVORITES, MOSTUSED }
 
 val Group.glyph get() = when (this) {
     Group.MINE -> "sparkle"; Group.GOV -> "shield"; Group.INSPIRE -> "star"; Group.SAMSUNG -> "apps"; Group.GOOGLE -> "globe"
     Group.SOCIAL -> "chat"; Group.MEDIA -> "play"; Group.GAMES -> "bolt"; Group.FINANCE -> "coin"; Group.SHOPPING -> "bag"
-    Group.TRAVEL -> "map"; Group.PRODUCTIVITY -> "note2"; Group.TOOLS -> "grid"; Group.OTHER -> "apps"; Group.SAMSUNG_EXTRA -> "layers"
+    Group.TRAVEL -> "map"; Group.PRODUCTIVITY -> "note2"; Group.TOOLS -> "grid"; Group.SAMSUNG_EXTRA -> "layers"; else -> "folder"
 }
 
 private fun ago(ms: Long): String {
@@ -68,9 +68,10 @@ private fun Header(title: String, onBack: (() -> Unit)?, right: @Composable () -
 }
 
 @Composable
-fun SettingsScreen(s: Siftra, isHome: Boolean, start: SPage = SPage.HOME, onClose: () -> Unit, onSetHome: () -> Unit) {
+fun SettingsScreen(s: Siftra, isHome: Boolean, start: SPage = SPage.HOME, onClose: () -> Unit, onSetHome: () -> Unit, onEditGroup: (Group) -> Unit = {}) {
     var page by remember { mutableStateOf(start) }
-    BackHandler { if (page == SPage.HOME) onClose() else page = SPage.HOME }
+    val up = { page = if (page == SPage.FAVORITES || page == SPage.MOSTUSED) SPage.APPS else SPage.HOME }
+    BackHandler { if (page == SPage.HOME) onClose() else up() }
     AnimatedContent(page, transitionSpec = {
         val fwd = targetState.ordinal > initialState.ordinal
         (slideInHorizontally(spring(dampingRatio = 1f, stiffness = 420f)) { if (fwd) it / 3 else -it / 3 } + fadeIn(tween(220))) togetherWith
@@ -80,8 +81,10 @@ fun SettingsScreen(s: Siftra, isHome: Boolean, start: SPage = SPage.HOME, onClos
             SPage.HOME -> SettingsHome(s, isHome, onClose, onSetHome) { page = it }
             SPage.LOOK -> LookPage(s) { page = SPage.HOME }
             SPage.LAYOUT -> LayoutPage(s) { page = SPage.HOME }
-            SPage.SORTING -> SortingPage(s) { page = SPage.HOME }
-            SPage.APPS -> AppsPage(s) { page = SPage.HOME }
+            SPage.SORTING -> SortingPage(s, onEditGroup) { page = SPage.HOME }
+            SPage.APPS -> AppsPage(s, { page = it }) { page = SPage.HOME }
+            SPage.FAVORITES -> FavoritesPage(s) { page = SPage.APPS }
+            SPage.MOSTUSED -> MostUsedPage(s) { page = SPage.APPS }
             SPage.ABOUT -> AboutPage { page = SPage.HOME }
         }
     }
@@ -114,7 +117,7 @@ private fun SettingsHome(s: Siftra, isHome: Boolean, onClose: () -> Unit, onSetH
     }
 }
 
-object BuildConfigLite { const val VERSION = "0.5.3" }
+object BuildConfigLite { const val VERSION = "0.5.4" }
 
 @Composable
 private fun LookPage(s: Siftra, back: () -> Unit) = Page {
@@ -167,7 +170,7 @@ private fun LayoutPage(s: Siftra, back: () -> Unit) = Page {
 }
 
 @Composable
-private fun SortingPage(s: Siftra, back: () -> Unit) = Page {
+private fun SortingPage(s: Siftra, onEditGroup: (Group) -> Unit, back: () -> Unit) = Page {
     val scope = rememberCoroutineScope()
     val ui = LocalUi.current
     Header("Sorting", back)
@@ -207,15 +210,16 @@ private fun SortingPage(s: Siftra, back: () -> Unit) = Page {
     // group order
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SLabel("Group order · drag ⠿ to reorder")
-        GroupOrderList(s)
+        GroupOrderList(s, onEditGroup)
+        if (Group.customs.isNotEmpty()) T("Tap one of your own groups to rename or delete it.", 12.sp, color = muted())
     }
     SToggleRow("Show Samsung Extras on home", s.showExtras) { s.setExtras(it) }
-    SButton("Re-sort all apps", true, "refresh") { scope.launch { s.organize(force = true) } }
+    SButton("Re-sort all apps", true, "refresh") { scope.launch { s.organize(force = true, show = true) } }
 }
 
 /** Drag-to-reorder list of groups; commits the new order on release. */
 @Composable
-private fun GroupOrderList(s: Siftra) {
+private fun GroupOrderList(s: Siftra, onEditGroup: (Group) -> Unit) {
     var list by remember(s.groupOrder) { mutableStateOf(s.groupOrder) }
     var dragIdx by remember { mutableStateOf(-1) }
     var dragDy by remember { mutableFloatStateOf(0f) }
@@ -227,7 +231,7 @@ private fun GroupOrderList(s: Siftra) {
             val dragging = i == dragIdx
             Box(Modifier.zIndex(if (dragging) 1f else 0f).onSizeChanged { if (i == 0) itemH = it.height.toFloat() }
                 .graphicsLayer { translationY = if (dragging) dragDy else 0f; val k = if (dragging) 1.03f else 1f; scaleX = k; scaleY = k; shadowElevation = if (dragging) 18f else 0f }) {
-                SRow(i + 1, g.glyph, g.title, "${counts[g] ?: 0} apps", i) {
+                SRow(i + 1, g.glyph, g.title, "${counts[g] ?: 0} apps" + if (g.custom) " · yours" else "", i, onClick = if (g.custom) ({ onEditGroup(g) }) else null) {
                     Box(Modifier.size(40.dp).semantics { contentDescription = "Reorder ${g.title}" }.pointerInput(g) {
                         detectDragGestures(
                             onDragStart = { dragIdx = list.indexOf(g); dragDy = 0f },
@@ -252,7 +256,7 @@ private fun GroupOrderList(s: Siftra) {
 }
 
 @Composable
-private fun AppsPage(s: Siftra, back: () -> Unit) = Page {
+private fun AppsPage(s: Siftra, go: (SPage) -> Unit, back: () -> Unit) = Page {
     val ui = LocalUi.current
     Header("Apps", back)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -268,6 +272,14 @@ private fun AppsPage(s: Siftra, back: () -> Unit) = Page {
                     }
                 }
             }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SLabel("Shelf")
+        val gap = if (LocalRowStyle.current == RowStyle.NUMBERED) 0.dp else 8.dp
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            SRow(1, "star", "Favorites", "${s.favorites.size} apps · reorder or remove", 0, onClick = { go(SPage.FAVORITES) })
+            SRow(2, "bar", "Most used", "Today, this week, all time", 1, onClick = { go(SPage.MOSTUSED) })
         }
     }
     SCard(pad = 14.dp) {

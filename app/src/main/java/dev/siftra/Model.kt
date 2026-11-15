@@ -26,22 +26,37 @@ import java.net.URL
 
 /* ======================= Groups ======================= */
 
-enum class Group(val title: String) {
-    MINE("Made by Mahmut"),
-    GOV("Government"),
-    INSPIRE("Inspiration"),
-    SAMSUNG("Samsung Essentials"),
-    GOOGLE("Google"),
-    SOCIAL("Social"),
-    MEDIA("Media"),
-    GAMES("Games"),
-    FINANCE("Finance"),
-    SHOPPING("Shopping"),
-    TRAVEL("Travel"),
-    PRODUCTIVITY("Productivity"),
-    TOOLS("Tools"),
-    OTHER("Other"),
-    SAMSUNG_EXTRA("Samsung Extras"),
+/** A group: one of the 15 built-ins, or a custom group the user created ("C_<id>"). */
+class Group private constructor(val name: String, title: String, val custom: Boolean) {
+    var title by mutableStateOf(title)
+    override fun equals(other: Any?) = other is Group && other.name == name
+    override fun hashCode() = name.hashCode()
+    override fun toString() = name
+
+    companion object {
+        val MINE = Group("MINE", "Made by Mahmut", false)
+        val GOV = Group("GOV", "Government", false)
+        val INSPIRE = Group("INSPIRE", "Inspiration", false)
+        val SAMSUNG = Group("SAMSUNG", "Samsung Essentials", false)
+        val GOOGLE = Group("GOOGLE", "Google", false)
+        val SOCIAL = Group("SOCIAL", "Social", false)
+        val MEDIA = Group("MEDIA", "Media", false)
+        val GAMES = Group("GAMES", "Games", false)
+        val FINANCE = Group("FINANCE", "Finance", false)
+        val SHOPPING = Group("SHOPPING", "Shopping", false)
+        val TRAVEL = Group("TRAVEL", "Travel", false)
+        val PRODUCTIVITY = Group("PRODUCTIVITY", "Productivity", false)
+        val TOOLS = Group("TOOLS", "Tools", false)
+        val OTHER = Group("OTHER", "Other", false)
+        val SAMSUNG_EXTRA = Group("SAMSUNG_EXTRA", "Samsung Extras", false)
+        val builtIns = listOf(MINE, GOV, INSPIRE, SAMSUNG, GOOGLE, SOCIAL, MEDIA, GAMES, FINANCE, SHOPPING, TRAVEL, PRODUCTIVITY, TOOLS, OTHER, SAMSUNG_EXTRA)
+
+        internal val customs = androidx.compose.runtime.mutableStateListOf<Group>()
+        /** Built-ins followed by custom groups. */
+        val entries: List<Group> get() = builtIns + customs
+        fun byName(n: String?) = if (n == null) null else entries.firstOrNull { it.name == n }
+        internal fun newCustom(id: String, title: String) = Group(id, title, true)
+    }
 }
 
 class AppItem(
@@ -127,6 +142,8 @@ object Gemini {
         val prompt = buildString {
             appendLine("Sort these Android apps into exactly one group each.")
             appendLine("Groups: GOV=official government/public services, INSPIRE=visual inspiration & moodboards, SOCIAL, MEDIA=video/music/news/photo, GAMES, FINANCE=banking/payments/crypto, SHOPPING=shops/food delivery/marketplaces, TRAVEL=maps/transport/flights/hotels, PRODUCTIVITY=work/notes/office/AI assistants, TOOLS=utilities/system/settings, OTHER.")
+            if (Group.customs.isNotEmpty()) appendLine("The user also made these groups; prefer one when it clearly fits: " +
+                Group.customs.joinToString { "${it.name}=\"${it.title}\"" } + ".")
             appendLine("Reply ONLY with a JSON object mapping each package name to a group id.")
             apps.forEach { appendLine("${it.pkg} | ${it.label}") }
         }
@@ -149,8 +166,8 @@ object Gemini {
         return parse(text, apps)
     }
 
-    private val allowed = listOf(Group.GOV, Group.INSPIRE, Group.SOCIAL, Group.MEDIA, Group.GAMES, Group.FINANCE,
-        Group.SHOPPING, Group.TRAVEL, Group.PRODUCTIVITY, Group.TOOLS, Group.OTHER)
+    private val allowed get() = listOf(Group.GOV, Group.INSPIRE, Group.SOCIAL, Group.MEDIA, Group.GAMES, Group.FINANCE,
+        Group.SHOPPING, Group.TRAVEL, Group.PRODUCTIVITY, Group.TOOLS, Group.OTHER) + Group.customs
 
     /** Reads the model's JSON (tolerates code fences / chatter); unknown or missing ids become OTHER. */
     fun parse(text: String, apps: List<AppItem>): Map<String, Group> {
@@ -158,7 +175,8 @@ object Gemini {
         if (a < 0 || b <= a) throw IOException("Gemini answer had no JSON")
         val obj = JSONObject(text.substring(a, b + 1))
         return apps.associate { app ->
-            app.pkg to (allowed.firstOrNull { it.name == obj.optString(app.pkg).trim().uppercase() } ?: Group.OTHER)
+            val v = obj.optString(app.pkg).trim()
+            app.pkg to (allowed.firstOrNull { it.name == v || it.name == v.uppercase() } ?: Group.OTHER)
         }
     }
 }
@@ -277,24 +295,40 @@ class Siftra(private val ctx: Context) {
             label.toString(), b.asImageBitmap(), componentName, user, applicationInfo, mono)
     }
 
-    private fun override(a: AppItem) = prefs.getString("ov|${a.pkg}", null)?.let { n -> Group.entries.firstOrNull { it.name == n } }
-    private fun ai(a: AppItem) = prefs.getString("ai|${a.pkg}", null)?.let { n -> Group.entries.firstOrNull { it.name == n } }
+    private fun override(a: AppItem) = Group.byName(prefs.getString("ov|${a.pkg}", null))
+    private fun ai(a: AppItem) = Group.byName(prefs.getString("ai|${a.pkg}", null))
     private fun needsAi(a: AppItem) = override(a) == null && Rules.of(a) == null && ai(a) == null
 
     fun regroup() { groupOf = apps.associate { it.key to (override(it) ?: Rules.of(it) ?: ai(it) ?: Group.OTHER) } }
 
-    /** Re-sorts everything. force = ask Gemini again for every app the rules can't place. */
-    suspend fun organize(force: Boolean) {
+    /** Live progress of a Gemini sort (shown full-screen only when the user pressed Re-sort). */
+    class SortProgress(labels: List<String>) {
+        val rows = androidx.compose.runtime.mutableStateListOf(*labels.map { it to (null as Group?) }.toTypedArray())
+        var done by mutableStateOf(0)
+        var running by mutableStateOf(true)
+        var error by mutableStateOf<String?>(null)
+        val total get() = rows.size
+    }
+    var progress by mutableStateOf<SortProgress?>(null)
+    var progressVisible by mutableStateOf(false)
+
+    /** Re-sorts everything. force = ask Gemini again for every app the rules can't place. show = open the progress screen. */
+    suspend fun organize(force: Boolean, show: Boolean = false) {
         val unknown = apps.filter { override(it) == null && Rules.of(it) == null && (force || ai(it) == null) }.distinctBy { it.pkg }
         if (unknown.isNotEmpty() && geminiKey.isNotBlank()) {
-            status = "Gemini is sorting ${unknown.size} app${if (unknown.size > 1) "s" else ""}…"
+            val pr = SortProgress(unknown.map { it.label }); progress = pr; progressVisible = show
+            status = if (show) "" else "Gemini is sorting ${unknown.size} app${if (unknown.size > 1) "s" else ""}…"
             try {
-                val res = withContext(Dispatchers.IO) {
-                    Gemini.classify(geminiKey, prefs.getString("model", "gemini-flash-latest")!!, unknown)
+                unknown.chunked(5).forEachIndexed { b, batch ->
+                    val res = withContext(Dispatchers.IO) { Gemini.classify(geminiKey, prefs.getString("model", "gemini-flash-latest")!!, batch) }
+                    prefs.edit().apply { res.forEach { (p, g) -> putString("ai|$p", g.name) } }.apply()
+                    batch.forEachIndexed { k, a -> pr.rows[b * 5 + k] = a.label to (res[a.pkg] ?: Group.OTHER) }
+                    pr.done += batch.size
+                    regroup()
                 }
-                prefs.edit().apply { res.forEach { (p, g) -> putString("ai|$p", g.name) } }.apply()
-                status = "Sorted ✓"
-            } catch (e: Exception) { status = "Gemini: ${e.message}" }
+                status = if (show) "" else "Sorted ✓"
+            } catch (e: Exception) { pr.error = e.message ?: "Gemini failed"; status = "Gemini: ${e.message}" }
+            pr.running = false
         } else status = "Sorted ✓"
         regroup()
     }
@@ -303,8 +337,36 @@ class Siftra(private val ctx: Context) {
 
     val visible get() = apps.filter { it.pkg !in hidden }
 
+    /* ---------- custom groups ---------- */
+    private val customsLoaded = run {
+        Group.customs.clear()
+        try {
+            val arr = JSONArray(prefs.getString("customGroups", "[]"))
+            for (i in 0 until arr.length()) arr.getJSONObject(i).let { Group.customs.add(Group.newCustom(it.getString("id"), it.getString("title"))) }
+        } catch (_: Exception) {}
+        true
+    }
+    private fun saveCustoms() = prefs.edit().putString("customGroups",
+        JSONArray(Group.customs.map { JSONObject().put("id", it.name).put("title", it.title) }).toString()).apply()
+
+    fun createGroup(title: String): Group {
+        val g = Group.newCustom("C_${System.currentTimeMillis()}", title.trim().ifBlank { "My group" })
+        Group.customs.add(g); saveCustoms()
+        saveGroupOrder(groupOrder + g)
+        return g
+    }
+    fun renameGroup(g: Group, title: String) { if (!g.custom || title.isBlank()) return; g.title = title.trim(); saveCustoms(); regroup() }
+    /** Deletes a custom group; its apps fall back to their automatic group. */
+    fun deleteGroup(g: Group) {
+        if (!g.custom) return
+        Group.customs.remove(g); saveCustoms()
+        prefs.edit().apply { prefs.all.filter { (k, v) -> (k.startsWith("ov|") || k.startsWith("ai|")) && v == g.name }.keys.forEach { remove(it) } }.apply()
+        saveGroupOrder(groupOrder - g)
+        regroup()
+    }
+
     /* ---------- group order (drag to reorder in Settings › Sorting) ---------- */
-    var groupOrder by mutableStateOf(prefs.getString("groupOrder", "")!!.split(',').mapNotNull { n -> Group.entries.firstOrNull { it.name == n } }
+    var groupOrder by mutableStateOf(prefs.getString("groupOrder", "")!!.split(',').mapNotNull { n -> Group.byName(n) }
         .let { saved -> saved + Group.entries.filter { it !in saved } }); private set
     fun saveGroupOrder(list: List<Group>) { groupOrder = list; prefs.edit().putString("groupOrder", list.joinToString(",") { it.name }).apply() }
 
@@ -344,6 +406,23 @@ class Siftra(private val ctx: Context) {
     }
     /** Opens since [since] (epoch ms); 0 = all time (uses the lifetime counter). */
     fun opens(a: AppItem, since: Long): Int = if (since <= 0) counts[a.key] ?: 0 else synchronized(history) { history[a.key]?.count { it >= since } ?: 0 }
+
+    fun saveFavorites(keys: List<String>) { favorites = keys.distinct(); prefs.edit().putString("fav", favorites.joinToString("|")).apply() }
+
+    /* ---------- app shortcuts (only when Siftra is the default home) ---------- */
+    fun shortcuts(a: AppItem): List<android.content.pm.ShortcutInfo> = try {
+        if (!la.hasShortcutHostPermission()) emptyList()
+        else la.getShortcuts(LauncherApps.ShortcutQuery().setPackage(a.pkg).setQueryFlags(
+            LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED), a.user)
+            ?.filter { it.isEnabled }?.sortedBy { it.rank }?.take(4).orEmpty()
+    } catch (_: Exception) { emptyList() }
+    fun shortcutIcon(si: android.content.pm.ShortcutInfo): ImageBitmap? = try {
+        la.getShortcutIconDrawable(si, ctx.resources.displayMetrics.densityDpi)?.let { d ->
+            val px = (40 * ctx.resources.displayMetrics.density).toInt()
+            Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888).also { b -> d.setBounds(0, 0, px, px); d.draw(Canvas(b)) }.asImageBitmap()
+        }
+    } catch (_: Exception) { null }
+    fun startShortcut(si: android.content.pm.ShortcutInfo) { try { la.startShortcut(si, null, null) } catch (_: Exception) {} }
 
     fun isFav(a: AppItem) = a.key in favorites
     fun toggleFav(a: AppItem) {

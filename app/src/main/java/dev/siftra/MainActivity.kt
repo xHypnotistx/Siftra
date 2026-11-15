@@ -111,13 +111,15 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
     var menuFor by remember { mutableStateOf<AppItem?>(null) }
     var settings by remember { mutableStateOf(false) }
     var settingsStart by remember { mutableStateOf(SPage.HOME) }
+    var moveFor by remember { mutableStateOf<AppItem?>(null) }
+    var editGroup by remember { mutableStateOf<Group?>(null) }
     var welcomed by remember { mutableStateOf(s.prefs.getBoolean("welcomed", false)) }
     var searchFocus by remember { mutableStateOf(false) }
     val act = androidx.compose.ui.platform.LocalContext.current as MainActivity
     var isHome by remember { mutableStateOf(act.isDefaultHome()) }
 
     LaunchedEffect(s.reloadTick) { s.load() }
-    LaunchedEffect(homePressed) { openGroup = null; drawer = false; menuFor = null; settings = false }
+    LaunchedEffect(homePressed) { openGroup = null; drawer = false; menuFor = null; settings = false; moveFor = null; editGroup = null; s.progressVisible = false }
     LaunchedEffect(s.status) { if (s.status.endsWith("✓")) { delay(1800); s.status = "" } }
 
     // Real frosted glass: blur the wallpaper behind the whole window while a panel is open.
@@ -159,10 +161,11 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
         Box(Modifier.fillMaxSize()) {
             if (s.backdrop != Backdrop.WALLPAPER) Canvas(Modifier.fillMaxSize()) { drawBackdrop(env) }
             // dim layer
-            val dim by animateFloatAsState(if (settings || !welcomed || drawer) 0.14f else if (overlay) 0.42f else 0f, tween(260), label = "dim")
+            val sorting = s.progressVisible && s.progress != null
+            val dim by animateFloatAsState(if (settings || !welcomed || drawer || sorting) 0.14f else if (overlay) 0.42f else 0f, tween(260), label = "dim")
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
 
-            val homeAlpha by animateFloatAsState(if (drawer || settings || !welcomed) 0f else if (openGroup != null) 0.3f else 1f, tween(240), label = "ha")
+            val homeAlpha by animateFloatAsState(if (drawer || settings || !welcomed || sorting) 0f else if (openGroup != null) 0.3f else 1f, tween(240), label = "ha")
             val homeScale by animateFloatAsState(if (overlay) 0.95f else 1f, springy, label = "hs")
             val homeBlur by animateDpAsState(if (openGroup != null) 14.dp else 0.dp, tween(260), label = "hb")
             val light = s.backdrop == Backdrop.PASTEL
@@ -175,10 +178,11 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                     .then(if (drawer || settings || !welcomed) Modifier.clearAndSetSemantics { } else Modifier),   // hidden home: inert
                 isHome = isHome,
                 onGroup = { lastGroup = it; openGroup = it },
+                onGroupLong = { editGroup = it },
                 onLaunch = ::open, onLong = onLong,
                 onDrawer = { searchFocus = it; drawer = true },
                 onSettings = { settingsStart = SPage.HOME; settings = true },
-                onOrganize = { scope.launch { s.organize(force = true) } },
+                onOrganize = { scope.launch { s.organize(force = true, show = true) } },
                 onSetHome = { askHome(); isHome = true },
                 overlay = overlay,
             )
@@ -215,12 +219,13 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                 AnimatedVisibility(drawer, enter = slideInVertically(spring(dampingRatio = 1f, stiffness = 380f)) { it / 4 } + fadeIn(tween(180)),
                     exit = slideOutVertically(tween(220)) { it / 5 } + fadeOut(tween(180))) {
                     AppDrawer(s, searchFocus, onClose = { drawer = false }, onLaunch = { a, r -> open(a, r) }, onLong = onLong,
-                        onOrganize = { scope.launch { s.organize(force = true) } },
-                        onOpenSettings = { p -> settingsStart = p; drawer = false; settings = true })
+                        onOrganize = { scope.launch { s.organize(force = true, show = true) } },
+                        onOpenSettings = { p -> settingsStart = p; drawer = false; settings = true }, onGroupLong = { editGroup = it })
                 }
                 AnimatedVisibility(settings, enter = fadeIn(tween(200)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 380f)) { it / 10 },
                     exit = fadeOut(tween(180)) + slideOutVertically(tween(200)) { it / 12 }) {
-                    SettingsScreen(s, isHome, settingsStart, onClose = { settings = false; settingsStart = SPage.HOME }, onSetHome = { askHome(); isHome = true })
+                    SettingsScreen(s, isHome, settingsStart, onClose = { settings = false; settingsStart = SPage.HOME }, onSetHome = { askHome(); isHome = true },
+                        onEditGroup = { editGroup = it })
                 }
                 AnimatedVisibility(!welcomed, enter = fadeIn(), exit = fadeOut(tween(260))) {
                     WelcomeScreen(s, onSetHome = { askHome(); isHome = true }) {
@@ -229,7 +234,18 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                 }
             }
 
-            menuFor?.let { a -> AppMenu(s, a, onClose = { menuFor = null }) }
+            CompositionLocalProvider(LocalInk provides ink, LocalUi provides homeUi, LocalRowStyle provides s.layout.rowStyle) {
+                AnimatedVisibility(s.progressVisible && s.progress != null, enter = fadeIn(), exit = fadeOut()) {
+                    GeminiSortingScreen(s) { s.progressVisible = false }
+                }
+                AnimatedVisibility(menuFor != null, enter = fadeIn(tween(160)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 420f)) { it / 6 },
+                    exit = fadeOut(tween(140))) {
+                    var last by remember { mutableStateOf(menuFor) }; if (menuFor != null) last = menuFor
+                    last?.let { a -> AppMenuSheet(s, a, onClose = { menuFor = null }) { app -> menuFor = null; moveFor = app } }
+                }
+                moveFor?.let { a -> MoveSheet(s, a) { moveFor = null } }
+                editGroup?.let { g -> GroupEditSheet(s, g, onClose = { editGroup = null }) { settingsStart = SPage.SORTING; settings = true } }
+            }
 
             // status toast
             AnimatedVisibility(s.status.isNotEmpty(), Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 90.dp),
@@ -248,7 +264,7 @@ private fun Home(
     s: Siftra, sts: SharedTransitionScope, openGroup: Group?, modifier: Modifier, isHome: Boolean,
     onGroup: (Group) -> Unit, onLaunch: (AppItem, Rect?) -> Unit, onLong: (AppItem) -> Unit,
     onDrawer: (Boolean) -> Unit, onSettings: () -> Unit, onOrganize: () -> Unit, onSetHome: () -> Unit,
-    overlay: Boolean = false,
+    overlay: Boolean = false, onGroupLong: (Group) -> Unit = {},
 ) {
     val swipeUp = Modifier.pointerInput(Unit) {
         var acc = 0f
@@ -290,10 +306,10 @@ private fun Home(
             contentPadding = PaddingValues(bottom = 12.dp),
         ) {
             items(sections, key = { it.first.name }) { (g, list) ->
-                CardSlot(sts, openGroup != g, g, list, Modifier.aspectRatio(1.12f).animateItem()) { onGroup(g) }
+                CardSlot(sts, openGroup != g, g, list, Modifier.aspectRatio(1.12f).animateItem(), { onGroupLong(g) }) { onGroup(g) }
             }
         }
-        } else GroupsArea(s, sts, openGroup, sections, onGroup, onLaunch, onLong, pullToDrawer, Modifier.weight(1f), overlay)
+        } else GroupsArea(s, sts, openGroup, sections, onGroup, onLaunch, onLong, pullToDrawer, Modifier.weight(1f), overlay, onGroupLong)
 
         // shelf: Most used ⇄ Favorites
         Shelf(s, swipeUp, onLaunch, onLong)
@@ -304,7 +320,7 @@ private fun Home(
 }
 
 @Composable
-private fun CardSlot(sts: SharedTransitionScope, visible: Boolean, g: Group, list: List<AppItem>, modifier: Modifier, onClick: () -> Unit) {
+private fun CardSlot(sts: SharedTransitionScope, visible: Boolean, g: Group, list: List<AppItem>, modifier: Modifier, onLongClick: () -> Unit, onClick: () -> Unit) {
     Box(modifier) {
         with(sts) {
             AnimatedVisibility(visible, enter = fadeIn(tween(220)), exit = fadeOut(tween(120))) {
@@ -312,21 +328,21 @@ private fun CardSlot(sts: SharedTransitionScope, visible: Boolean, g: Group, lis
                     Modifier.sharedBounds(rememberSharedContentState("g_${g.name}"), this@AnimatedVisibility,
                         boundsTransform = { _, _ -> spring(dampingRatio = 0.84f, stiffness = 360f) },
                         resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()),
-                    onClick = onClick)
+                    onClick = onClick, onLongClick = onLongClick)
             }
         }
     }
 }
 
 @Composable
-private fun GroupCard(g: Group, list: List<AppItem>, modifier: Modifier, onClick: () -> Unit) {
+private fun GroupCard(g: Group, list: List<AppItem>, modifier: Modifier, onClick: () -> Unit, onLongClick: () -> Unit = {}) {
     var pressed by remember { mutableStateOf(false) }
     val sc by animateFloatAsState(if (pressed) 0.96f else 1f, springy, label = "p")
     Column(
         modifier.fillMaxSize().scale(sc).glass(26.dp)
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onPress = { pressed = true; tryAwaitRelease(); pressed = false }, onTap = { onClick() })
+                    onPress = { pressed = true; tryAwaitRelease(); pressed = false }, onTap = { onClick() }, onLongPress = { onLongClick() })
             }
             .padding(14.dp)
     ) {
@@ -415,52 +431,6 @@ fun AppIcon(a: AppItem, onLaunch: (AppItem, Rect?) -> Unit, onLong: (AppItem) ->
         AppGlyph(a, 52.dp)
         Spacer(Modifier.height(5.dp))
         Text(a.label, 11.5.sp, maxLines = 1, center = true, modifier = Modifier.padding(horizontal = 2.dp))
-    }
-}
-
-@Composable
-private fun AppMenu(s: Siftra, a: AppItem, onClose: () -> Unit) {
-    var moving by remember { mutableStateOf(false) }
-    val act = androidx.compose.ui.platform.LocalContext.current
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).noRipple(onClose), contentAlignment = Alignment.Center) {
-        Column(Modifier.fillMaxWidth(0.82f).glass(28.dp, dark = true).noRipple { }.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AppGlyph(a, 44.dp); Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(a.label, 17.sp, FontWeight.SemiBold, maxLines = 1)
-                    Text(s.groupOf[a.key]?.title ?: "", 12.sp, alpha = 0.65f)
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            if (!moving) {
-                MenuRow(if (s.isFav(a)) "★  Remove from favorites" else "☆  Add to favorites") { s.toggleFav(a); onClose() }
-                MenuRow("⇄  Move to group…") { moving = true }
-                MenuRow("◌  Hide") { s.hide(a); onClose() }
-                MenuRow("ⓘ  App info") { s.appInfo(a); onClose() }
-                MenuRow("✕  Uninstall") {
-                    act.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${a.pkg}"))); onClose()
-                }
-            } else {
-                LazyColumn(Modifier.heightIn(max = 380.dp)) {
-                    items(Group.entries.toList()) { g -> MenuRow((if (s.groupOf[a.key] == g) "●  " else "○  ") + g.title) { s.move(a, g); onClose() } }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChipRow(items: List<String>, selected: String, onPick: (String) -> Unit) {
-    Row(Modifier.padding(top = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.forEach { t ->
-            val on = t == selected
-            val ui = LocalUi.current
-            Box(Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) ui.container else Color(0x14FFFFFF))
-                .border(1.dp, if (on) ui.accent else Color(0x26FFFFFF), RoundedCornerShape(14.dp))
-                .clickable { onPick(t) }.padding(horizontal = 12.dp, vertical = 7.dp)) {
-                Text(t, 13.sp, if (on) FontWeight.SemiBold else FontWeight.Normal, color = if (on) ui.onContainer else Color.White)
-            }
-        }
     }
 }
 

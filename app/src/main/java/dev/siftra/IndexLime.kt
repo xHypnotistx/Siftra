@@ -108,6 +108,7 @@ private fun staticColor(g: Group, i: Int, n: Int): Color {
         Group.PRODUCTIVITY -> LimeInk
         Group.TOOLS -> Color(0xFFA9B1BC)
         Group.OTHER, Group.SAMSUNG_EXTRA -> Muted
+        else -> LimeInk            // custom groups
     }
 }
 
@@ -129,7 +130,7 @@ private fun themeColor(g: Group, i: Int, n: Int, t: Float, lead: Boolean): Color
     }
     Group.PRODUCTIVITY -> LimeInk
     Group.TOOLS -> lerp(Color(0xFFA9B1BC), Color.White, bell(frac(t / 2.8f - i * 0.04f), 0.6f, 0.08f))
-    Group.OTHER, Group.SAMSUNG_EXTRA -> Lime
+    else -> Lime
 }
 
 private fun themeDx(g: Group, i: Int, t: Float, lead: Boolean) = if (lead && g == Group.GAMES && glitch(t)) (hash(i, (t * 30).toInt()) - 0.5f) * 6f else 0f
@@ -190,6 +191,7 @@ private class TapMemo { var row: Group? = null; var at = 0L; var prevOpen: Group
 fun IndexLime(
     s: Siftra, sections: List<Pair<Group, List<AppItem>>>, overlay: Boolean,
     onLaunch: (AppItem, Rect?) -> Unit, onLong: (AppItem) -> Unit, conn: NestedScrollConnection, modifier: Modifier,
+    onGroupLong: (Group) -> Unit = {},
 ) {
     var open by remember { mutableStateOf<Group?>(null) }
     var armed by remember { mutableStateOf<Group?>(null) }
@@ -253,8 +255,13 @@ fun IndexLime(
                                             dragging = null; armed = null; dragPx = 0f
                                         }
                                     } else {
-                                        val up = waitForUpOrCancellation()
-                                        if (up != null) { toggle(); memo.row = g; memo.at = up.uptimeMillis }
+                                        var timedOut = true
+                                        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation().also { timedOut = false } }
+                                        if (timedOut) {                                   // held still → long-press: rename / delete
+                                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                            onGroupLong(g)
+                                            do { val e = awaitPointerEvent(); e.changes.forEach { it.consume() } } while (e.changes.any { it.pressed })
+                                        } else if (up != null) { toggle(); memo.row = g; memo.at = up.uptimeMillis }
                                     }
                                 }
                             }

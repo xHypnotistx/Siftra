@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.4 — Concept redesign, stage 3: groups, shelf pages, Gemini progress
+
+- **New long-press app menu.** A themed bottom sheet replaces the old pop-up. It shows the app's group and how many times you opened it this week, five actions (Favorite, Move, Hide, Info, Uninstall), and the app's own shortcuts with their icons. Shortcuts only appear while Siftra is your default home.
+- **Your own groups.** Move › "New group…" creates a group and moves the app into it. Gemini sees your group names when it re-sorts and can place apps there.
+- **Rename or delete groups.** Long-press a group's title on any home layout or in the drawer, or tap one of your groups in Settings › Sorting. Deleting a group sends its apps back to their automatic groups. Built-in groups can't be renamed and offer a shortcut to reordering instead.
+- **Favorites editor** (Settings › Apps › Favorites): remove with ×, long-press and drag to reorder, and add apps from a searchable list.
+- **Most used** (Settings › Apps › Most used): Today, This week and All time, with a top-3 card and bars for the rest.
+- **Gemini sorting screen.** Pressing Re-sort (home, drawer or Settings) shows live progress: a ring, each app as it's placed, and any error. "Run in background" hides it. Automatic sorting stays silent with a short message.
+- Tests: 24 passing, including custom groups (create, rename, delete, restart, Gemini answers with a custom group) and a full UI run through the menu, Move, group editing, Favorites, Most used and the progress screen.
+
 ## 0.5.3 (2026-11-15): stage 2 of the concept redesign (app drawer + search)
 
 - **Themed drawer.** Follows the selected layout's style and colors (including Orbit's light look). Grab handle; swipe down on the header to close.
