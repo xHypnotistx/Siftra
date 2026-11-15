@@ -164,7 +164,7 @@ object Gemini {
 }
 
 /** Lets tests feed a synthetic app list instead of LauncherApps. */
-object TestHooks { @Volatile var apps: (() -> List<AppItem>)? = null }
+object TestHooks { @Volatile var apps: (() -> List<AppItem>)? = null; @Volatile var freezeMotion = false }
 
 /* ======================= State ======================= */
 
@@ -204,7 +204,7 @@ class Siftra(private val ctx: Context) {
             HomeLayout.STRATA -> { setBackdropMode(Backdrop.YOU); setRibbedGlass(false); setClock(ClockStyle.SPLIT) }
             HomeLayout.MONOLITH -> { setBackdropMode(Backdrop.EMBER); setRibbedGlass(true); setClock(ClockStyle.MONOLITH) }
             HomeLayout.ORBIT -> { setBackdropMode(Backdrop.PASTEL); setRibbedGlass(false); setClock(ClockStyle.ANALOG) }
-            HomeLayout.INDEX -> { setBackdropMode(Backdrop.MONO); setRibbedGlass(true); setClock(ClockStyle.MINIMAL) }
+            HomeLayout.INDEX -> { setBackdropMode(Backdrop.LIME); setRibbedGlass(true); setClock(ClockStyle.MINIMAL); setThemedIcons(true) }
             HomeLayout.CARDS -> {}
         }
     }

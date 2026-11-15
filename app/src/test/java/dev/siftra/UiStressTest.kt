@@ -29,6 +29,7 @@ class UiStressTest {
 
     private fun start(layout: HomeLayout, motion: Boolean = false, extra: (android.content.SharedPreferences.Editor) -> Unit = {}) {
         TestHooks.apps = { CATALOG.map { it.first } + filler(60) }
+        TestHooks.freezeMotion = true
         val e = ctx.getSharedPreferences("siftra", 0).edit().clear()
         e.putBoolean("motion", motion); extra(e); e.commit()
         Siftra(ctx).setHomeLayout(layout)                       // apply the layout preset the same way the UI does
@@ -39,7 +40,7 @@ class UiStressTest {
 
     @After fun stop() {
         try { if (::scenario.isInitialized) scenario.close() } catch (t: Throwable) { println("teardown (Robolectric surface): ${t.javaClass.simpleName}") }
-        TestHooks.apps = null
+        TestHooks.apps = null; TestHooks.freezeMotion = false
     }
 
     private fun back() { scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }; rule.waitForIdle() }
@@ -80,6 +81,31 @@ class UiStressTest {
     @Test fun monolith() = groupRoundTrip(HomeLayout.MONOLITH)
     @Test fun orbit() = groupRoundTrip(HomeLayout.ORBIT)
     @Test fun index() = groupRoundTrip(HomeLayout.INDEX)
+
+    /* ---------- Index Lime: double-tap, then drag down pulls a group open ---------- */
+
+    @Test fun indexDoubleTapDrag() {
+        start(HomeLayout.INDEX)
+        val row = rule.onNode(hasText("Government") and hasClickAction())
+        row.performTouchInput {
+            click(center); advanceEventTime(120)                 // double-tap…
+            down(center)                                          // …and keep the finger down
+            repeat(12) { moveBy(androidx.compose.ui.geometry.Offset(0f, 30f)); advanceEventTime(16) }
+            up()
+        }
+        rule.waitUntil(5_000) { exists("e-Devlet") }
+        val s = model()
+        assertTrue("drag hint should be learned", s.prefs.getBoolean("dragLearned", false))
+        // short drag snaps back (stays closed for another group)
+        rule.onNode(hasText("Inspiration") and hasClickAction()).performTouchInput {
+            click(center); advanceEventTime(120); down(center); moveBy(androidx.compose.ui.geometry.Offset(0f, 20f)); up()
+        }
+        rule.waitForIdle()
+        assertFalse(exists("Pinterest"))
+        // back folds the open group
+        back(); rule.waitUntil(5_000) { !exists("e-Devlet") }
+        shot("INDEX-lime-after-drag")
+    }
 
     /* ---------- drawer, search, chips, long-press menu ---------- */
 
@@ -179,7 +205,7 @@ class UiStressTest {
 
     @Test fun animatedBackdropFrames() {
         rule.mainClock.autoAdvance = false
-        TestHooks.apps = { CATALOG.map { it.first } }
+        TestHooks.apps = { CATALOG.map { it.first } }; TestHooks.freezeMotion = false
         ctx.getSharedPreferences("siftra", 0).edit().clear().putBoolean("motion", true).commit()
         Siftra(ctx).setHomeLayout(HomeLayout.STRATA)
         scenario = ActivityScenario.launch(MainActivity::class.java)

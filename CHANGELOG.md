@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0 (2026-11-15): Index Lime
+
+Index is now **Index Lime**, which replaces the grey Index.
+
+- **Look.** Lime (#C6FF3D) on a near-black olive backdrop, ribbed glass, film grain. New *Lime* backdrop. The clock colon blinks in lime. App icons are lime-themed by default; switch to real icons with *Themed icons* in settings.
+- **Living titles.** Each group name rises in letter by letter (fade, lift, blur clearing), then keeps moving in its own theme:
+  Made by Mahmut (lime, pixel flicker) · Government (Turkish red with a white glint, crescent and star) · Inspiration (iridescent) · Samsung (blue highlight) · Google (blue, red, yellow and green slowly rotating) · Social (pink to orange, heartbeat) · Media (equalizer bounce) · Games (neon cyan, glitch) · Finance (emerald, gold glint) · Shopping (tangerine bounce) · Travel (sky-to-sunset drift) · Productivity (typewriter cursor) · Tools (scan line).
+- **Unfold.** Tap a group to unfold its apps in place. The drawer springs open with a slight overshoot, and icons pop in one after another. One group is open at a time; Back folds it.
+- **Double-tap, then drag down.** Double-tap a group to arm it (subtle haptic tick and a pulsing *DRAG ↓* tag). Then drag down: the drawer follows your finger and rubber-bands past full. Release past about a third and it springs open with a confirm haptic; otherwise it snaps back. Works as one continuous gesture or as a double-tap followed by a separate drag. The hint line hides after the first successful drag.
+- **Big groups.** Groups with more than 8 apps unfold into a horizontal scrolling row; smaller ones use a grid.
+- **Battery.** All motion (titles, backdrop, clock colon) runs only while the home screen is visible and pauses when an app is open or the screen is off.
+- **Tests.** New `indexDoubleTapDrag` test (full drag opens, short drag snaps back, Back folds); full suite passes.
+
 ## 0.4.1 (2026-11-15): stress test fixes
 
 Found by the new Robolectric stress suite (18 tests, all passing).

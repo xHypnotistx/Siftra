@@ -109,7 +109,7 @@ class LogicStressTest {
             HomeLayout.STRATA to Triple(Backdrop.YOU, false, ClockStyle.SPLIT),
             HomeLayout.MONOLITH to Triple(Backdrop.EMBER, true, ClockStyle.MONOLITH),
             HomeLayout.ORBIT to Triple(Backdrop.PASTEL, false, ClockStyle.ANALOG),
-            HomeLayout.INDEX to Triple(Backdrop.MONO, true, ClockStyle.MINIMAL),
+            HomeLayout.INDEX to Triple(Backdrop.LIME, true, ClockStyle.MINIMAL),
         )
         expect.forEach { (l, t) ->
             s.setHomeLayout(l)

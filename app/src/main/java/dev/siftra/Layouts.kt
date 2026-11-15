@@ -46,7 +46,7 @@ fun SharedSource(sts: SharedTransitionScope, visible: Boolean, g: Group, modifie
 fun GroupsArea(
     s: Siftra, sts: SharedTransitionScope, openGroup: Group?, sections: List<Pair<Group, List<AppItem>>>,
     onGroup: (Group) -> Unit, onLaunch: (AppItem, Rect?) -> Unit, onLong: (AppItem) -> Unit,
-    conn: NestedScrollConnection, modifier: Modifier,
+    conn: NestedScrollConnection, modifier: Modifier, overlay: Boolean = false,
 ) {
     val ui = LocalUi.current
     val ink = LocalInk.current
@@ -119,34 +119,8 @@ fun GroupsArea(
             }
         }
 
-        /* ---------- Index: numbered editorial list, tap to unfold ---------- */
-        HomeLayout.INDEX -> {
-            var open by remember { mutableStateOf<Group?>(null) }
-            LazyColumn(modifier.nestedScroll(conn), contentPadding = PaddingValues(bottom = 12.dp)) {
-                itemsIndexed(sections, key = { _, it -> it.first.name }) { i, (g, list) ->
-                    val isOpen = open == g
-                    Column(Modifier.animateItem().animateContentSize(spring(dampingRatio = 0.85f, stiffness = 420f))) {
-                        Row(Modifier.fillMaxWidth().noRipple { open = if (isOpen) null else g }.padding(vertical = 7.dp),
-                            verticalAlignment = Alignment.Bottom) {
-                            T("%02d".format(i + 1), 11.sp, Modifier.width(32.dp).padding(bottom = 8.dp), FontWeight.SemiBold, alpha = 0.55f, tracking = 1.5.sp)
-                            T(g.title, if (isOpen) 40.sp else 30.sp, Modifier.weight(1f), display = true, italic = isOpen,
-                                color = if (isOpen) ui.accent else androidx.compose.ui.graphics.Color.Unspecified, maxLines = 1)
-                            T("${list.size}", 12.sp, Modifier.padding(bottom = 8.dp), FontWeight.SemiBold, alpha = 0.7f)
-                        }
-                        if (isOpen) Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp).glass(22.dp).padding(vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            list.chunked(4).forEach { r ->
-                                Row(Modifier.fillMaxWidth()) {
-                                    r.forEach { a -> Box(Modifier.weight(1f)) { AppIcon(a, onLaunch, onLong) } }
-                                    repeat(4 - r.size) { Spacer(Modifier.weight(1f)) }
-                                }
-                            }
-                        }
-                        Box(Modifier.fillMaxWidth().height(1.dp).background(ink.copy(alpha = 0.14f)))
-                    }
-                }
-            }
-        }
+        /* ---------- Index Lime: living editorial list, tap / double-tap-drag to unfold ---------- */
+        HomeLayout.INDEX -> IndexLime(s, sections, overlay, onLaunch, onLong, conn, modifier)
 
         HomeLayout.CARDS -> {}
     }

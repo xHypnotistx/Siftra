@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.*
@@ -166,7 +167,11 @@ fun ClockView(style: ClockStyle, modifier: Modifier = Modifier) {
             }
         }
         ClockStyle.MINIMAL -> Row(modifier, verticalAlignment = Alignment.Bottom) {
-            T(f("HH:mm"), 34.sp, weight = FontWeight.Medium)
+            val bt = rememberMotionTime(true)
+            T(f("HH"), 34.sp, weight = FontWeight.Medium)
+            T(":", 34.sp, androidx.compose.ui.Modifier.graphicsLayer { alpha = if ((bt.value / 2f) % 1f < 0.5f) 1f else 0.25f },
+                weight = FontWeight.Medium, color = ui.accent)
+            T(f("mm"), 34.sp, weight = FontWeight.Medium)
             Spacer(Modifier.width(10.dp))
             T(date, 13.sp, alpha = 0.7f, modifier = Modifier.padding(bottom = 6.dp))
         }

@@ -137,13 +137,9 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
         }
     }
 
-    val time = remember { mutableFloatStateOf(0f) }
     val screen = remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
-    val animated = s.motion && s.backdrop in setOf(Backdrop.AURORA, Backdrop.YOU, Backdrop.EMBER, Backdrop.MONO, Backdrop.PASTEL)
-    if (animated) LaunchedEffect(Unit) {
-        val start = withFrameNanos { it }
-        while (true) withFrameNanos { time.floatValue = (it - start) / 1e9f }
-    }
+    val animated = s.motion && s.backdrop in setOf(Backdrop.AURORA, Backdrop.YOU, Backdrop.EMBER, Backdrop.MONO, Backdrop.LIME, Backdrop.PASTEL)
+    val time = rememberMotionTime(animated)
     val youCtx = androidx.compose.ui.platform.LocalContext.current
     val env = remember(s.backdrop, s.photo, s.ribbed) {
         fun c(id: Int) = Color(youCtx.getColor(id))
@@ -168,8 +164,10 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
             val homeScale by animateFloatAsState(if (overlay) 0.95f else 1f, springy, label = "hs")
             val homeBlur by animateDpAsState(if (openGroup != null) 14.dp else 0.dp, tween(260), label = "hb")
             val light = s.backdrop == Backdrop.PASTEL
-            val homeUi = remember(ui, light) { if (light) lightVariant(ctxT, ui) else ui }
-            CompositionLocalProvider(LocalInk provides (if (light) Color(0xFF231D4F) else Color.White), LocalUi provides homeUi) {
+            val lime = s.layout == HomeLayout.INDEX
+            val homeUi = remember(ui, light, lime) { if (lime) limeTheme(ui) else if (light) lightVariant(ctxT, ui) else ui }
+            val ink = if (lime) LimeInk else if (light) Color(0xFF231D4F) else Color.White
+            CompositionLocalProvider(LocalInk provides ink, LocalUi provides homeUi) {
             Home(
                 s, sts, openGroup, Modifier.graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur)
                     .then(if (drawer || settings) Modifier.clearAndSetSemantics { } else Modifier),   // hidden home: inert
@@ -180,6 +178,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                 onSettings = { settings = true },
                 onOrganize = { scope.launch { s.organize(force = true) } },
                 onSetHome = { askHome(); isHome = true },
+                overlay = overlay,
             )
             }
 
@@ -240,6 +239,7 @@ private fun Home(
     s: Siftra, sts: SharedTransitionScope, openGroup: Group?, modifier: Modifier, isHome: Boolean,
     onGroup: (Group) -> Unit, onLaunch: (AppItem, Rect?) -> Unit, onLong: (AppItem) -> Unit,
     onDrawer: (Boolean) -> Unit, onSettings: () -> Unit, onOrganize: () -> Unit, onSetHome: () -> Unit,
+    overlay: Boolean = false,
 ) {
     val swipeUp = Modifier.pointerInput(Unit) {
         var acc = 0f
@@ -284,7 +284,7 @@ private fun Home(
                 CardSlot(sts, openGroup != g, g, list, Modifier.aspectRatio(1.12f).animateItem()) { onGroup(g) }
             }
         }
-        } else GroupsArea(s, sts, openGroup, sections, onGroup, onLaunch, onLong, pullToDrawer, Modifier.weight(1f))
+        } else GroupsArea(s, sts, openGroup, sections, onGroup, onLaunch, onLong, pullToDrawer, Modifier.weight(1f), overlay)
 
         // shelf: Most used ⇄ Favorites
         Shelf(s, swipeUp, onLaunch, onLong)

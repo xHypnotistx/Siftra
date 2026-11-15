@@ -31,13 +31,14 @@ import kotlin.math.sin
 
 /* ======================= backdrop ======================= */
 
-enum class Backdrop(val title: String) { AURORA("Aurora"), YOU("You"), EMBER("Ember"), MONO("Mono"), PASTEL("Pastel"), PHOTO("Photo"), WALLPAPER("Wallpaper") }
+enum class Backdrop(val title: String) { AURORA("Aurora"), YOU("You"), EMBER("Ember"), MONO("Mono"), LIME("Lime"), PASTEL("Pastel"), PHOTO("Photo"), WALLPAPER("Wallpaper") }
 
 private class Palette(val base: Color, val blobs: List<Color>)
 
 private val palettes = mapOf(
     Backdrop.AURORA to Palette(Color(0xFF05070F), listOf(Color(0xFF1F4BFF), Color(0xFF7B2CFF), Color(0xFF00C2FF), Color(0xFF2A1A8F))),
     Backdrop.EMBER to Palette(Color(0xFF070912), listOf(Color(0xFF14307A), Color(0xFFFF6A2B), Color(0xFFB0124A), Color(0xFF3FA9F5))),
+    Backdrop.LIME to Palette(Color(0xFF0A0B08), listOf(Color(0x4DC6FF3D), Color(0x8C4A6014), Color(0x1FC6FF3D))),
     Backdrop.PASTEL to Palette(Color(0xFFA29CF5), listOf(Color(0xFFFFFFFF), Color(0xFFFFC2D6), Color(0xFFC8F3FF), Color(0xFF7F86F2))),
     Backdrop.MONO to Palette(Color(0xFF0A0A0B), listOf(Color(0xFF8E8E93), Color(0xFF3A3A3F), Color(0xFFD9D9DE), Color(0xFF26262A))),
 )
@@ -71,7 +72,7 @@ fun DrawScope.drawBackdrop(env: GlassEnv) {
         val cx = w * (0.5f + 0.42f * sin(a * (0.8f + i * 0.13f) + i))
         val cy = h * (0.5f + 0.42f * cos(a * (0.6f + i * 0.17f) + i * 2.1f))
         val r = max(w, h) * (0.42f + 0.07f * sin(a * 1.3f + i))
-        drawCircle(Brush.radialGradient(listOf(c, c.copy(alpha = 0.35f), Color.Transparent), Offset(cx, cy), r), r, Offset(cx, cy))
+        drawCircle(Brush.radialGradient(listOf(c, c.copy(alpha = c.alpha * 0.35f), Color.Transparent), Offset(cx, cy), r), r, Offset(cx, cy))
     }
 }
 
