@@ -35,7 +35,22 @@ class UiStressTest {
         Siftra(ctx).setHomeLayout(layout)                       // apply the layout preset the same way the UI does
         if (!motion) ctx.getSharedPreferences("siftra", 0).edit().putBoolean("motion", false).commit()
         scenario = ActivityScenario.launch(MainActivity::class.java)
-        rule.waitUntil(10_000) { rule.onAllNodes(hasText("Made by Mahmut", ignoreCase = true)).fetchSemanticsNodes().isNotEmpty() }
+        val shown = { rule.onAllNodes(hasText("Made by Mahmut", ignoreCase = true)).fetchSemanticsNodes().isNotEmpty() }
+        // Rarely, late in a long Robolectric run, the first frames after launch wait on the fake clock (seen only with many
+        // tests sharing one JVM, never in a single test or on a phone). Advancing the main looper's clock unsticks it.
+        if (runCatching { rule.waitUntil(8_000) { shown() } }.isFailure) {
+            println("START NUDGE $layout")
+            val end = System.currentTimeMillis() + 6_000
+            while (!shown() && System.currentTimeMillis() < end) org.robolectric.shadows.ShadowLooper.idleMainLooper(16, java.util.concurrent.TimeUnit.MILLISECONDS)
+            println("START NUDGE $layout → ${if (shown()) "rescued by advancing the looper clock" else "still stuck"}")
+        }
+        try { rule.waitUntil(12_000) { shown() } }
+        catch (t: Throwable) {
+            shot("start-timeout-$layout")
+            println("START TIMEOUT layout=$layout apps=${runCatching { model().apps.size }.getOrNull()} sections=${runCatching { model().sections(true).size }.getOrNull()}")
+            println(runCatching { rule.onAllNodes(isRoot())[0].printToString().lines().filter { "Text" in it }.take(25).joinToString("\n") }.getOrElse { "tree: $it" })
+            throw t
+        }
     }
 
     @After fun stop() {
@@ -451,5 +466,20 @@ class UiStressTest {
         scenario.onActivity { a -> MainActivity::class.java.getDeclaredMethod("onNewIntent", android.content.Intent::class.java)
             .apply { isAccessible = true }.invoke(a, android.content.Intent(android.content.Intent.ACTION_MAIN)) }
         rule.waitUntil(5_000) { exists("Search apps", ) || rule.onAllNodes(hasText("Search apps", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test fun lateLoadStillShowsGroups() {
+        for (layout in listOf(HomeLayout.STRATA, HomeLayout.CARDS, HomeLayout.INDEX)) {
+            TestHooks.apps = { Thread.sleep(700); CATALOG.map { it.first } + filler(60) }
+            TestHooks.freezeMotion = true
+            val e = ctx.getSharedPreferences("siftra", 0).edit().clear()
+            e.putBoolean("motion", false).putBoolean("welcomed", true); e.commit()
+            Siftra(ctx).setHomeLayout(layout)
+            ctx.getSharedPreferences("siftra", 0).edit().putBoolean("motion", false).commit()
+            scenario = ActivityScenario.launch(MainActivity::class.java)
+            val ok = runCatching { rule.waitUntil(8_000) { rule.onAllNodes(hasText("Made by Mahmut", ignoreCase = true)).fetchSemanticsNodes().isNotEmpty() } }.isSuccess
+            assertTrue("groups missing after a late load ($layout)", ok)
+            scenario.close()
+        }
     }
 }

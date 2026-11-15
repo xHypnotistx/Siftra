@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.8 — Smarter sorting
+
+- **Learns from your moves.** If every app you moved from one developer went to the same group, that developer's other apps go there too.
+  - Example: move Duolingo to your "Study" group and Duolingo ABC follows.
+  - It only applies to apps the built-in rules don't recognise. It beats an older Gemini guess, and it means Gemini isn't asked about those apps at all.
+  - Moves from one developer into different groups teach nothing.
+- **Wider offline rules.** About 150 new keywords, many of them Turkish:
+  - Banks, wallets and meal cards (Paycell, Sipay, Multinet, Pluxee…), plus brokers and crypto exchanges.
+  - Shops and food chains (ŞOK, BİM, PttAVM, LC Waikiki, Teknosa…).
+  - Transport (Martı, İETT, İZBAN, TCDD, AJet…), plus Turkish TV and news (TRT, tabii, puhutv, beIN…).
+  - Game studios (Peak, Dream Games, Rollic, HoYoverse…), AI assistants and tools.
+  - Government (ÖSYM, MEB, PTT, İBB, İŞKUR, belediye apps…).
+- **Turkish letters fold before matching**, so "İŞCEP", "İşCep" and "iscep" are the same word.
+- **Fewer look-alike mistakes.** Keywords that would have misfiled apps were left out on purpose: Kick the Buddy stays in Games, the Flo period tracker isn't sent to Shopping, Paramount+ isn't sent to Finance.
+- **Fewer Gemini calls.** Up to 12 apps per request instead of 5.
+- **The Move sheet says why an app is where it is**: moved by you, sorted on your phone, learned from your moves, or placed by Gemini.
+- Tests: 30 passing. The rule catalog grew to 95 real apps, all sorted correctly. New tests cover learning, developer prefixes, Turkish folding and a late app load. The test harness also nudges Robolectric's fake clock if a long run stalls.
+
 ## 0.5.7 — Widgets page
 
 - **A widget page, one swipe right from home.** Any Android widget can live there: weather, music, calendar, notes. The group layouts are untouched.

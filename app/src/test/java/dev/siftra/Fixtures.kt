@@ -110,6 +110,24 @@ val CATALOG: List<Pair<AppItem, Group>> = listOf(
     app("com.mahmut.quickgrab", "QuickGrab") to Group.MINE,
     app("com.mahmut.wallfit", "Wallfit") to Group.MINE,
     app("com.mahmut.rainbreak", "Rainbreak") to Group.MINE,
+    // 0.5.8: wider offline rules, Turkish letter folding, and look-alike words that must not misfile
+    app("com.turkcell.bip", "BiP") to Group.SOCIAL,
+    app("com.sample.mobilebranch", "İŞCEP") to Group.FINANCE,
+    app("com.martitech.marti", "Martı") to Group.TRAVEL,
+    app("tr.com.sok.android", "ŞOK Market") to Group.SHOPPING,
+    app("com.peakgames.toonblast", "Toon Blast") to Group.GAMES,
+    app("com.dreamgames.royalmatch", "Royal Match") to Group.GAMES,
+    app("tv.puhutv.android", "puhutv") to Group.MEDIA,
+    app("com.trt.tabii", "tabii") to Group.MEDIA,
+    app("tr.com.ptt.mobil", "PTT") to Group.GOV,
+    app("com.anydesk.anydeskandroid", "AnyDesk") to Group.TOOLS,
+    app("com.x8bit.bitwarden", "Bitwarden") to Group.TOOLS,
+    app("ai.perplexity.app.android", "Perplexity") to Group.PRODUCTIVITY,
+    app("com.flightradar24free", "Flightradar24") to Group.TRAVEL,
+    app("com.tencent.mm", "WeChat") to Group.SOCIAL,
+    app("com.playgendary.kickthebuddy", "Kick the Buddy", category = ApplicationInfo.CATEGORY_GAME) to Group.GAMES,
+    app("org.iggymedia.periodtracker", "Flo Period Tracker") to Group.OTHER,
+    app("com.cbs.app", "Paramount+") to Group.OTHER,
 )
 
 /** n extra random third-party apps for stress runs. */

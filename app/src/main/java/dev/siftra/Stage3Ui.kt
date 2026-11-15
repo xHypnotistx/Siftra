@@ -122,7 +122,10 @@ fun MoveSheet(s: Siftra, a: AppItem, onClose: () -> Unit) {
     Sheet(onClose) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppGlyph(a, 40.dp)
-            Column { T("Move", 12.sp, color = muted()); T("${a.label} to…", 24.sp, display = true, maxLines = 1) }
+            Column {
+                T("Move", 12.sp, color = muted()); T("${a.label} to…", 24.sp, display = true, maxLines = 1)
+                T(s.sourceOf(a), 11.5.sp, color = muted())
+            }
         }
         val counts = remember(s.apps, s.groupOf) { s.sections(true).associate { it.first to it.second.size } }
         Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(if (LocalRowStyle.current == RowStyle.NUMBERED) 0.dp else 6.dp)) {

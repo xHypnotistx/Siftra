@@ -237,4 +237,32 @@ class LogicStressTest {
         assertTrue(Dots.has(ig)); assertFalse(Dots.has(app("x.y", "Other")))
         Dots.set(emptyMap()); assertTrue(Dots.counts.isEmpty())
     }
+
+    @Test fun learningFromMovesAndDeveloperPrefixes() {
+        assertEquals("com.akbank", devPrefix("com.akbank.android.apps.akbank_direkt"))
+        assertEquals("tr.gov.saglik", devPrefix("tr.gov.saglik.enabiz"))
+        assertEquals("com.android.chrome", devPrefix("com.android.chrome"))
+        val extra = listOf(app("com.duolingo", "Duolingo"), app("com.duolingo.abc", "Duolingo ABC"),
+            app("org.sample.alpha", "Alpha Thing"), app("org.sample.beta", "Beta Thing"), app("org.sample.gamma", "Gamma Thing"))
+        val s = loaded(CATALOG.map { it.first } + extra)
+        val abc = s.apps.first { it.pkg == "com.duolingo.abc" }
+        assertEquals(Group.OTHER, s.groupOf[abc.key]); assertEquals("Not sorted yet", s.sourceOf(abc))
+        val study = s.createGroup("Study")
+        s.move(s.apps.first { it.pkg == "com.duolingo" }, study)
+        assertEquals("sibling app follows your move", study, s.groupOf[abc.key])
+        assertEquals("Learned from apps you moved", s.sourceOf(abc))
+        // a learned guess beats an older Gemini guess, and saves asking Gemini again
+        s.prefs.edit().putString("ai|com.duolingo.abc", "PRODUCTIVITY").commit(); s.regroup()
+        assertEquals(study, s.groupOf[abc.key])
+        // two moves from one developer into different groups → no learning for that developer
+        s.move(s.apps.first { it.pkg == "org.sample.alpha" }, Group.TOOLS)
+        assertEquals(Group.TOOLS, s.groupOf[s.apps.first { it.pkg == "org.sample.gamma" }.key])
+        s.move(s.apps.first { it.pkg == "org.sample.beta" }, Group.MEDIA)
+        assertEquals(Group.OTHER, s.groupOf[s.apps.first { it.pkg == "org.sample.gamma" }.key])
+        // rules still win over learning for apps they know
+        s.move(s.apps.first { it.label == "WhatsApp" }, study)
+        assertEquals(study, s.groupOf[s.apps.first { it.label == "WhatsApp" }.key])
+        // Turkish folding
+        assertEquals("iscep sok marti", Rules.norm("İŞCEP ŞOK Martı"))
+    }
 }

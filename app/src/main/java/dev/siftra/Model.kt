@@ -83,41 +83,67 @@ object Rules {
 
     private val keywords: List<Pair<Group, List<String>>> = listOf(
         Group.GOV to listOf("e-devlet", "edevlet", "e-nabız", "enabiz", "mhrs", "e-okul", "eokul", "hayat eve sığar",
-            "hayateve", "uyap", "sgk", "e-imza", "turkiye.gov", "gib", "gov"),
+            "hayateve", "uyap", "sgk", "e-imza", "turkiye.gov", "gib", "gov", "ösym", "osym", "meb", "ptt", "ibb", "belediye",
+            "nvi", "emniyet", "egm", "jandarma", "işkur", "iskur", "tkgm", "e-tapu", "tcmb", "hes kodu", "e-nabiz"),
         Group.INSPIRE to listOf("pinterest", "savee", "are.na", "arena", "cosmos", "mymind", "behance", "artstation",
-            "dribbble", "unsplash", "vsco", "muzli"),
+            "dribbble", "unsplash", "vsco", "muzli", "mobbin", "weheartit", "flickr", "500px", "designspiration"),
         Group.SOCIAL to listOf("instagram", "whatsapp", "telegram", "twitter", "facebook", "snapchat", "discord", "reddit",
             "musically", "trill", "tiktok", "barcelona", "threads", "linkedin", "bluesky", "signal", "messenger",
-            "bereal", "mastodon", "tumblr"),
+            "bereal", "mastodon", "tumblr", "bip", "viber", "naver.line", "kakao", "wechat", "skype", "tinder", "bumble",
+            "hinge", "vkontakte", "clubhouse", "quora", "nextdoor", "yubo"),
         Group.FINANCE to listOf("bank", "banka", "garanti", "akbank", "isbank", "ziraat", "yapikredi", "ykb", "papara",
             "enpara", "qnb", "vakif", "halkbank", "denizbank", "paypal", "binance", "revolut", "btcturk", "paribu",
             "ininal", "tosla", "cüzdan", "wallet", "borsa", "kripto", "crypto", "wise", "iscep", "işcep", "kuveyt",
             "finans", "ondijital", "money", "fibabanka", "odeabank", "şekerbank", "albaraka", "hsbc", "teb", "ing",
-            "vakıf", "bankası", "bankacılık", "midas", "colendi"),
+            "vakıf", "bankası", "bankacılık", "midas", "colendi", "paycell", "sipay", "okx", "bybit", "bitget",
+            "kucoin", "icrypex", "gedik", "investing", "tradingview", "matriks", "foreks", "cepteteb", "nkolay",
+            "multinet", "pluxee", "sodexo", "edenred", "setcard"),
         Group.SHOPPING to listOf("trendyol", "hepsiburada", "amazon", "n11", "getir", "yemeksepeti", "temu",
-            "aliexpress", "sahibinden", "letgo", "dolap", "migros", "a101", "shein", "ebay", "ikea", "zara", "çiçeksepeti"),
+            "aliexpress", "sahibinden", "letgo", "dolap", "migros", "a101", "shein", "ebay", "ikea", "zara", "çiçeksepeti",
+            "pttavm", "boyner", "waikiki", "defacto", "koton", "mediamarkt", "teknosa", "vatan", "banabi", "istegelsin",
+            "carrefour", "şok", "bim", "macrocenter", "starbucks", "dominos", "burgerking", "mcdonalds", "kfc", "popeyes",
+            "morhipo", "gratis", "watsons", "rossmann", "decathlon", "nike", "adidas", "etsy", "vinted", "olx", "armut", "hopi"),
         Group.TRAVEL to listOf("maps", "waze", "uber", "bitaksi", "booking", "airbnb", "turkishairlines", "pegasus",
-            "obilet", "moovit", "istanbulkart", "enuygun", "trivago", "skyscanner", "yandex.taxi", "thy"),
+            "obilet", "moovit", "istanbulkart", "enuygun", "trivago", "skyscanner", "yandex.taxi", "thy", "ajet",
+            "sunexpress", "anadolujet", "tcdd", "iett", "metro istanbul", "metroistanbul", "marti", "bolt", "lyft", "blablacar", "tripadvisor",
+            "expedia", "agoda", "kayak", "flightradar", "citymapper", "yandex.navi", "tatilsepeti", "jollytur", "etstur",
+            "otelz", "hotels", "izban", "kentkart"),
         Group.MEDIA to listOf("spotify", "netflix", "disney", "twitch", "soundcloud", "deezer", "music", "video",
-            "player", "podcast", "primevideo", "exxen", "blutv", "tabii", "mubi", "shazam", "fizy"),
+            "player", "podcast", "primevideo", "exxen", "blutv", "tabii", "mubi", "shazam", "fizy", "trt", "puhutv", "gain",
+            "bein", "todtv", "ssport", "dsmart", "tivibu", "vlc", "mxplayer", "radio", "radyo", "news", "haber",
+            "hurriyet", "sozcu", "milliyet", "ntv", "cnnturk", "bbc", "medium", "wattpad", "kindle", "storytel", "audible",
+            "letterboxd", "imdb", "capcut", "picsart", "lightroom", "inshot", "muud", "plex", "jellyfin", "crunchyroll",
+            "hbomax", "wbd.stream"),
         Group.GAMES to listOf("game", "games", "supercell", "roblox", "mojang", "minecraft", "pubg", "epicgames",
-            "riotgames", "gameloft", "king.com"),
+            "riotgames", "gameloft", "king.com", "peakgames", "dreamgames", "rollic", "mihoyo", "hoyoverse", "garena",
+            "moonton", "zynga", "rovio", "playrix", "miniclip", "nintendo", "ubisoft", "netmarble", "nexon", "activision",
+            "tencent", "voodoo", "ketchapp"),
         Group.PRODUCTIVITY to listOf("office", "word", "excel", "powerpoint", "notion", "obsidian", "todo", "outlook",
-            "slack", "teams", "zoom", "trello", "evernote", "todoist", "ticktick", "chatgpt", "claude", "gemini"),
+            "slack", "teams", "zoom", "trello", "evernote", "todoist", "ticktick", "chatgpt", "claude", "gemini",
+            "docs", "dropbox", "onedrive", "pdf", "acrobat", "canva", "figma", "miro", "asana", "clickup", "jira",
+            "github", "copilot", "perplexity", "deepseek", "grok", "mistral", "calendar", "mail", "webex"),
         Group.TOOLS to listOf("vpn", "defender", "scmx", "antivirus", "security", "cleaner", "rar", "rarlab", "zip",
             "telekom", "turkcell", "vodafone", "keyboard", "swiftkey", "gboard", "scanner", "flashlight", "calculator",
-            "translate", "launcher", "widget", "backup", "authenticator"),
-    )
+            "translate", "launcher", "widget", "backup", "authenticator", "bluetooth", "wifi", "speedtest", "ookla",
+            "qr", "barcode", "compass", "battery", "recorder", "termux", "adguard", "nextdns", "1dot1dot1dot1",
+            "cloudflare", "bitwarden", "1password", "lastpass", "anydesk", "teamviewer", "shizuku", "fdroid",
+            "zarchiver", "tasker", "macrodroid", "homeassistant", "tuya", "smartlife"),
+    ).map { (g, ks) -> g to ks.map(::norm) }
 
-    private val split = Regex("[^a-z0-9çğıöşü]+")
+    private val split = Regex("[^a-z0-9.]+")
+
+    /** Lower-case and fold Turkish letters so "İşCep", "iscep" and "ışcep" all match the same keyword. */
+    fun norm(t: String): String = t.replace('İ', 'i').lowercase(java.util.Locale.ROOT)
+        .replace('ı', 'i').replace('ş', 's').replace('ğ', 'g').replace('ç', 'c').replace('ö', 'o').replace('ü', 'u')
+        .replace("\u0307", "")
 
     /** Returns a group, or null when the rules can't tell (→ Gemini / Other). */
     fun of(a: AppItem): Group? {
         val p = a.pkg
         if (p.startsWith("com.mahmut.")) return Group.MINE
         if (p in samsungEssentials) return Group.SAMSUNG
-        val hay = "$p ${a.label}".lowercase()
-        val tokens = hay.split(split).toSet()
+        val hay = norm("$p ${a.label}")
+        val tokens = hay.split(split).flatMap { it.split('.') + it }.toSet()
         fun hit(k: String) = if (k.length >= 5) hay.contains(k) else k in tokens
         keywords.first().second.let { if (it.any(::hit)) return Group.GOV }
         keywords[1].second.let { if (it.any(::hit)) return Group.INSPIRE }
@@ -183,6 +209,20 @@ object Gemini {
             app.pkg to (allowed.firstOrNull { it.name == v || it.name == v.uppercase() } ?: Group.OTHER)
         }
     }
+}
+
+/** Apps per Gemini request: one call covers a typical batch of new installs. */
+const val GEMINI_BATCH = 12
+
+/**
+ * The developer part of a package name: "com.akbank" for "com.akbank.android.apps.x", three parts when the second one is
+ * generic ("tr.gov.saglik" for "tr.gov.saglik.enabiz").
+ */
+fun devPrefix(pkg: String): String {
+    val p = pkg.split('.')
+    if (p.size < 3) return pkg
+    return if (p[1] in setOf("com", "org", "net", "gov", "edu", "co", "ac", "app", "android", "mobile", "apps")) p.take(3).joinToString(".")
+    else p.take(2).joinToString(".")
 }
 
 /** Lets tests feed a synthetic app list instead of LauncherApps. */
@@ -345,7 +385,7 @@ class Siftra(private val ctx: Context) {
         apps = list
         regroup()
         if (TestHooks.apps == null && (built.get() > 0 || (prev.isNotEmpty() && list.size != prev.size))) saveIcons(list)
-        if (geminiKey.isNotBlank() && list.any { needsAi(it) }) organize(force = false)
+        if (geminiKey.isNotBlank()) { val l = learned(); if (list.any { needsAi(it, l) }) organize(force = false) }
     }
 
     private fun saveIcons(list: List<AppItem>) {
@@ -379,9 +419,34 @@ class Siftra(private val ctx: Context) {
 
     private fun override(a: AppItem) = Group.byName(prefs.getString("ov|${a.pkg}", null))
     private fun ai(a: AppItem) = Group.byName(prefs.getString("ai|${a.pkg}", null))
-    private fun needsAi(a: AppItem) = override(a) == null && Rules.of(a) == null && ai(a) == null
+    private fun needsAi(a: AppItem, learned: Map<String, Group>) =
+        override(a) == null && Rules.of(a) == null && ai(a) == null && learned[devPrefix(a.pkg)] == null
 
-    fun regroup() { groupOf = apps.associate { it.key to (override(it) ?: Rules.of(it) ?: ai(it) ?: Group.OTHER) } }
+    fun regroup() {
+        val learned = learned()
+        groupOf = apps.associate { it.key to (override(it) ?: Rules.of(it) ?: learned[devPrefix(it.pkg)] ?: ai(it) ?: Group.OTHER) }
+    }
+
+    /**
+     * Learning from your moves: when every app you moved from one developer went to the same group, that developer's
+     * other apps the rules can't place go there too (before Gemini is asked, and over an older Gemini guess).
+     */
+    fun learned(): Map<String, Group> {
+        val by = HashMap<String, MutableSet<Group>>()
+        prefs.all.forEach { (k, v) ->
+            if (k.startsWith("ov|")) Group.byName(v as? String)?.let { g -> by.getOrPut(devPrefix(k.drop(3))) { mutableSetOf() } += g }
+        }
+        return by.filterValues { it.size == 1 }.mapValues { it.value.first() }
+    }
+
+    /** Why an app sits where it does, shown in the Move sheet. */
+    fun sourceOf(a: AppItem): String = when {
+        override(a) != null -> "Moved there by you"
+        Rules.of(a) != null -> "Sorted on your phone"
+        learned()[devPrefix(a.pkg)] != null -> "Learned from apps you moved"
+        ai(a) != null -> "Placed by Gemini"
+        else -> "Not sorted yet"
+    }
 
     /** Live progress of a Gemini sort (shown full-screen only when the user pressed Re-sort). */
     class SortProgress(labels: List<String>) {
@@ -396,15 +461,17 @@ class Siftra(private val ctx: Context) {
 
     /** Re-sorts everything. force = ask Gemini again for every app the rules can't place. show = open the progress screen. */
     suspend fun organize(force: Boolean, show: Boolean = false) {
-        val unknown = apps.filter { override(it) == null && Rules.of(it) == null && (force || ai(it) == null) }.distinctBy { it.pkg }
+        val learned = learned()
+        val unknown = apps.filter { override(it) == null && Rules.of(it) == null && learned[devPrefix(it.pkg)] == null && (force || ai(it) == null) }
+            .distinctBy { it.pkg }
         if (unknown.isNotEmpty() && geminiKey.isNotBlank()) {
             val pr = SortProgress(unknown.map { it.label }); progress = pr; progressVisible = show
             status = if (show) "" else "Gemini is sorting ${unknown.size} app${if (unknown.size > 1) "s" else ""}…"
             try {
-                unknown.chunked(5).forEachIndexed { b, batch ->
+                unknown.chunked(GEMINI_BATCH).forEachIndexed { b, batch ->
                     val res = withContext(Dispatchers.IO) { Gemini.classify(geminiKey, prefs.getString("model", "gemini-flash-latest")!!, batch) }
                     prefs.edit().apply { res.forEach { (p, g) -> putString("ai|$p", g.name) } }.apply()
-                    batch.forEachIndexed { k, a -> pr.rows[b * 5 + k] = a.label to (res[a.pkg] ?: Group.OTHER) }
+                    batch.forEachIndexed { k, a -> pr.rows[b * GEMINI_BATCH + k] = a.label to (res[a.pkg] ?: Group.OTHER) }
                     pr.done += batch.size
                     regroup()
                 }
@@ -532,10 +599,11 @@ class Siftra(private val ctx: Context) {
     /** (sorted by on-device rules, placed by Gemini, moved by you) */
     fun sortStats(): Triple<Int, Int, Int> {
         var rules = 0; var ai = 0; var manual = 0
+        val learned = learned()
         apps.distinctBy { it.pkg }.forEach { a ->
             when {
                 override(a) != null -> manual++
-                Rules.of(a) != null -> rules++
+                Rules.of(a) != null || learned[devPrefix(a.pkg)] != null -> rules++
                 ai(a) != null -> ai++
                 else -> rules++   // fell to Other without Gemini
             }

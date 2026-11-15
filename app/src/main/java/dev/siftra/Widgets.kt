@@ -94,9 +94,15 @@ internal object WidgetSlots {
 object WidgetHost {
     private const val HOST_ID = 0x51F7
     private var host: AppWidgetHost? = null
+    private var hostApp: Context? = null
     private val views = HashMap<Int, AppWidgetHostView>()
 
-    fun get(ctx: Context): AppWidgetHost = host ?: AppWidgetHost(ctx.applicationContext, HOST_ID).also { host = it }
+    fun get(ctx: Context): AppWidgetHost {
+        val app = ctx.applicationContext
+        host?.let { if (hostApp === app) return it }
+        views.clear()
+        return AppWidgetHost(app, HOST_ID).also { host = it; hostApp = app }
+    }
     fun manager(ctx: Context): AppWidgetManager = AppWidgetManager.getInstance(ctx)
 
     fun view(ctx: Context, id: Int): AppWidgetHostView? {
