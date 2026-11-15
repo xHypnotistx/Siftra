@@ -163,8 +163,38 @@ class Siftra(private val ctx: Context) {
     var showExtras by mutableStateOf(prefs.getBoolean("extras", false))
     var status by mutableStateOf("")
     var geminiKey by mutableStateOf(prefs.getString("key", "")!!)
+    var backdrop by mutableStateOf(Backdrop.entries.firstOrNull { it.name == prefs.getString("backdrop", "AURORA") } ?: Backdrop.AURORA); private set
+    var ribbed by mutableStateOf(prefs.getBoolean("ribbed", false)); private set
+    var motion by mutableStateOf(prefs.getBoolean("motion", true)); private set
+    var photo by mutableStateOf<ImageBitmap?>(null); private set
+    private val photoFile get() = java.io.File(ctx.filesDir, "backdrop.jpg")
+
+    fun setBackdropMode(b: Backdrop) { backdrop = b; prefs.edit().putString("backdrop", b.name).apply() }
+    fun setRibbedGlass(v: Boolean) { ribbed = v; prefs.edit().putBoolean("ribbed", v).apply() }
+    fun setMotionOn(v: Boolean) { motion = v; prefs.edit().putBoolean("motion", v).apply() }
+
+    /** Picked photo → scaled to the screen once, stored privately, drawn behind the glass. */
+    fun setPhoto(uri: android.net.Uri) {
+        val dm = ctx.resources.displayMetrics
+        val target = maxOf(dm.widthPixels, dm.heightPixels) + 200
+        try {
+            val bmp = android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(ctx.contentResolver, uri)) { d, info, _ ->
+                d.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+                val m = maxOf(info.size.width, info.size.height)
+                if (m > target) d.setTargetSize(info.size.width * target / m, info.size.height * target / m)
+            }
+            photoFile.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            photo = bmp.asImageBitmap()
+            setBackdropMode(Backdrop.PHOTO)
+        } catch (e: Exception) { status = "Couldn't load that photo" }
+    }
+
+    private fun loadPhoto() {
+        if (photoFile.exists()) android.graphics.BitmapFactory.decodeFile(photoFile.path)?.let { photo = it.asImageBitmap() }
+    }
 
     init {
+        loadPhoto()
         counts = prefs.all.filterKeys { it.startsWith("lc|") }.mapNotNull { (k, v) -> (v as? Int)?.let { k.drop(3) to it } }.toMap()
         la.registerCallback(object : LauncherApps.Callback() {
             override fun onPackageRemoved(p: String?, u: UserHandle?) = reloadSoon()

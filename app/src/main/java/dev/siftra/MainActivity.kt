@@ -28,7 +28,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -41,6 +43,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -58,11 +61,6 @@ import java.util.Locale
 /* ======================= look ======================= */
 
 private val txtShadow = Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 8f)
-private fun Modifier.glass(r: Dp = 26.dp, strong: Boolean = false) = this
-    .clip(RoundedCornerShape(r))
-    .background(Brush.verticalGradient(
-        if (strong) listOf(Color(0x3DFFFFFF), Color(0x24FFFFFF)) else listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))))
-    .border(1.dp, Brush.verticalGradient(listOf(Color(0x59FFFFFF), Color(0x12FFFFFF))), RoundedCornerShape(r))
 
 private fun Modifier.noRipple(onClick: () -> Unit) = composed {
     clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
@@ -120,8 +118,8 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
     // Real frosted glass: blur the wallpaper behind the whole window while a panel is open.
     val overlay = openGroup != null || drawer || settings
     val blur = remember { Animatable(0f) }
-    LaunchedEffect(overlay) {
-        blur.animateTo(if (overlay) 80f else 0f, tween(if (overlay) 320 else 220)) { setBlur(value.toInt()) }
+    LaunchedEffect(overlay, s.backdrop) {
+        blur.animateTo(if (overlay && s.backdrop == Backdrop.WALLPAPER) 36f else 0f, tween(if (overlay) 320 else 220)) { setBlur(value.toInt()) }
     }
 
     fun open(a: AppItem, r: Rect?) { s.launch(a, r) }
@@ -136,17 +134,29 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
         }
     }
 
-    SharedTransitionLayout(Modifier.fillMaxSize()) {
+    val time = remember { mutableFloatStateOf(0f) }
+    val screen = remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    val animated = s.motion && s.backdrop in setOf(Backdrop.AURORA, Backdrop.EMBER, Backdrop.MONO)
+    if (animated) LaunchedEffect(Unit) {
+        val start = withFrameNanos { it }
+        while (true) withFrameNanos { time.floatValue = (it - start) / 1e9f }
+    }
+    val env = remember(s.backdrop, s.photo, s.ribbed) { GlassEnv(s.backdrop, s.photo, s.ribbed, time, screen) }
+
+    CompositionLocalProvider(LocalGlass provides env) {
+    SharedTransitionLayout(Modifier.fillMaxSize().onSizeChanged { screen.value = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }) {
         val sts = this
         Box(Modifier.fillMaxSize()) {
+            if (s.backdrop != Backdrop.WALLPAPER) Canvas(Modifier.fillMaxSize()) { drawBackdrop(env) }
             // dim layer
-            val dim by animateFloatAsState(if (overlay) 0.28f else 0f, tween(260), label = "dim")
+            val dim by animateFloatAsState(if (overlay) 0.42f else 0f, tween(260), label = "dim")
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
 
-            val homeAlpha by animateFloatAsState(if (drawer || settings) 0f else 1f, tween(200), label = "ha")
-            val homeScale by animateFloatAsState(if (drawer) 0.94f else 1f, springy, label = "hs")
+            val homeAlpha by animateFloatAsState(if (drawer || settings) 0f else if (openGroup != null) 0.3f else 1f, tween(240), label = "ha")
+            val homeScale by animateFloatAsState(if (overlay) 0.95f else 1f, springy, label = "hs")
+            val homeBlur by animateDpAsState(if (openGroup != null) 14.dp else 0.dp, tween(260), label = "hb")
             Home(
-                s, sts, openGroup, Modifier.graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale },
+                s, sts, openGroup, Modifier.graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur),
                 isHome = isHome,
                 onGroup = { lastGroup = it; openGroup = it },
                 onLaunch = ::open, onLong = onLong,
@@ -165,15 +175,16 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                         Column(
                             Modifier.fillMaxWidth(0.9f)
                                 .sharedBounds(rememberSharedContentState("g_${g.name}"), this@AnimatedVisibility,
-                                    boundsTransform = { _, _ -> spring(dampingRatio = 0.84f, stiffness = 360f) })
-                                .glass(32.dp, strong = true)
+                                    boundsTransform = { _, _ -> spring(dampingRatio = 0.84f, stiffness = 360f) },
+                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds())
+                                .glass(32.dp, dark = true)
                                 .noRipple { }
                                 .padding(20.dp)
                         ) {
                             Text(g.title, 24.sp, FontWeight.SemiBold)
                             Text("${list.size} apps", 13.sp, alpha = 0.7f)
                             Spacer(Modifier.height(14.dp))
-                            LazyVerticalGrid(GridCells.Fixed(4), Modifier.heightIn(max = 460.dp),
+                            LazyVerticalGrid(GridCells.Fixed(4), Modifier.heightIn(max = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.62f).dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                 items(list, key = { it.key }) { a -> AppIcon(a, onLaunch = ::open, onLong = onLong) }
                             }
@@ -198,9 +209,10 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
             // status toast
             AnimatedVisibility(s.status.isNotEmpty(), Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 90.dp),
                 enter = fadeIn() + slideInVertically { it }, exit = fadeOut()) {
-                Box(Modifier.glass(18.dp, true).padding(horizontal = 16.dp, vertical = 10.dp)) { Text(s.status, 13.sp) }
+                Box(Modifier.glass(18.dp, dark = true).padding(horizontal = 16.dp, vertical = 10.dp)) { Text(s.status, 13.sp) }
             }
         }
+    }
     }
 }
 
@@ -270,7 +282,8 @@ private fun CardSlot(sts: SharedTransitionScope, visible: Boolean, g: Group, lis
             AnimatedVisibility(visible, enter = fadeIn(tween(220)), exit = fadeOut(tween(120))) {
                 GroupCard(g, list,
                     Modifier.sharedBounds(rememberSharedContentState("g_${g.name}"), this@AnimatedVisibility,
-                        boundsTransform = { _, _ -> spring(dampingRatio = 0.84f, stiffness = 360f) }),
+                        boundsTransform = { _, _ -> spring(dampingRatio = 0.84f, stiffness = 360f) },
+                        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()),
                     onClick = onClick)
             }
         }
@@ -450,7 +463,7 @@ private fun AppMenu(s: Siftra, a: AppItem, onClose: () -> Unit) {
     var moving by remember { mutableStateOf(false) }
     val act = androidx.compose.ui.platform.LocalContext.current
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).noRipple(onClose), contentAlignment = Alignment.Center) {
-        Column(Modifier.fillMaxWidth(0.82f).glass(28.dp, true).noRipple { }.padding(18.dp)) {
+        Column(Modifier.fillMaxWidth(0.82f).glass(28.dp, dark = true).noRipple { }.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(a.icon, null, Modifier.size(44.dp)); Spacer(Modifier.width(12.dp))
                 Column {
@@ -477,6 +490,18 @@ private fun AppMenu(s: Siftra, a: AppItem, onClose: () -> Unit) {
 }
 
 @Composable
+private fun ChipRow(items: List<String>, selected: String, onPick: (String) -> Unit) {
+    Row(Modifier.padding(top = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEach { t ->
+            val on = t == selected
+            Box(Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) Color(0x40FFFFFF) else Color(0x14FFFFFF))
+                .border(1.dp, Color(if (on) 0x99FFFFFF else 0x26FFFFFF), RoundedCornerShape(14.dp))
+                .clickable { onPick(t) }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text(t, 13.sp) }
+        }
+    }
+}
+
+@Composable
 private fun MenuRow(t: String, onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp)) { Text(t, 15.sp) }
 }
@@ -486,7 +511,8 @@ private fun SettingsPanel(s: Siftra, onClose: () -> Unit, onSetHome: () -> Unit,
     var key by remember { mutableStateOf(s.geminiKey) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     Box(Modifier.fillMaxSize().noRipple { s.saveKey(key); onClose() }, contentAlignment = Alignment.Center) {
-        Column(Modifier.fillMaxWidth(0.88f).glass(30.dp, true).noRipple { }.padding(20.dp)) {
+        Column(Modifier.fillMaxWidth(0.88f).heightIn(max = 640.dp).glass(30.dp, dark = true).noRipple { }
+            .verticalScroll(rememberScrollState()).padding(20.dp)) {
             Text("Siftra", 24.sp, FontWeight.SemiBold)
             Text("Open-source launcher that sifts your apps into strata", 12.5.sp, alpha = 0.7f)
             Spacer(Modifier.height(16.dp))
@@ -502,6 +528,19 @@ private fun SettingsPanel(s: Siftra, onClose: () -> Unit, onSetHome: () -> Unit,
                     ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
                 })
             Spacer(Modifier.height(10.dp))
+            Text("Backdrop", 13.sp, alpha = 0.8f)
+            val pick = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { s.setPhoto(it) } }
+            ChipRow(Backdrop.entries.map { it.title }, s.backdrop.title) { t ->
+                val b = Backdrop.entries.first { it.title == t }
+                if (b == Backdrop.PHOTO) pick.launch(androidx.activity.result.PickVisualMediaRequest(
+                    androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                else s.setBackdropMode(b)
+            }
+            Text("Glass", 13.sp, alpha = 0.8f, modifier = Modifier.padding(top = 10.dp))
+            ChipRow(listOf("Frosted", "Ribbed"), if (s.ribbed) "Ribbed" else "Frosted") { s.setRibbedGlass(it == "Ribbed") }
+            Spacer(Modifier.height(6.dp))
+            MenuRow((if (s.motion) "☑" else "☐") + "  Animated backdrop") { s.setMotionOn(!s.motion) }
             MenuRow((if (s.showExtras) "☑" else "☐") + "  Show Samsung Extras on home") { s.setExtras(!s.showExtras) }
             MenuRow("↺  Reset my manual moves") { onReset() }
             MenuRow("◌  Unhide all apps (${s.hidden.size})") { s.unhideAll() }
