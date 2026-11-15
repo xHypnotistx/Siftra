@@ -69,6 +69,7 @@ fun GroupsArea(
                         verticalAlignment = Alignment.CenterVertically) {
                         Text(g.title, 23.sp, display = true, maxLines = 1)
                         Spacer(Modifier.width(10.dp))
+                        GroupDot(list)
                         Text("${list.size}", 12.sp, FontWeight.SemiBold, color = ui.accent)
                         Spacer(Modifier.weight(1f))
                         val shown = list.take(4)
@@ -91,6 +92,7 @@ fun GroupsArea(
                         Spacer(Modifier.weight(1f))
                         Row(verticalAlignment = Alignment.Bottom) {
                             T("${list.size}", 54.sp, display = true, lineHeight = 50.sp)
+                            GroupDot(list, Modifier.align(Alignment.Top).padding(top = 10.dp))
                             Spacer(Modifier.weight(1f))
                             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 list.take(4).chunked(2).forEach { r -> Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) { r.forEach { AppGlyph(it, 30.dp) } } }
@@ -116,7 +118,7 @@ fun GroupsArea(
                         Column(sm.fillMaxSize().glass(d / 2).groupClick({ onGroup(g) }, { onGroupLong(g) }).padding(8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text(g.title, if (big) 19.sp else 15.sp, display = true, center = true, maxLines = 1)
-                            Text("${list.size} apps", 11.sp, FontWeight.SemiBold, color = ui.accent)
+                            Row(verticalAlignment = Alignment.CenterVertically) { GroupDot(list); Text("${list.size} apps", 11.sp, FontWeight.SemiBold, color = ui.accent) }
                             Spacer(Modifier.height(6.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 list.take(if (big) 4 else 3).forEach { AppGlyph(it, if (big) 26.dp else 22.dp) }

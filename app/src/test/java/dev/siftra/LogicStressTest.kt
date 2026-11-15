@@ -226,4 +226,15 @@ class LogicStressTest {
         assertTrue(c.read().isEmpty())
         dir.deleteRecursively()
     }
+
+    @Test fun dotsOnlyTouchChangedEntries() {
+        Dots.set(mapOf("a#0" to 1, "b#0" to 2))
+        assertEquals(mapOf("a#0" to 1, "b#0" to 2), Dots.counts.toMap())
+        Dots.set(mapOf("b#0" to 3, "c#10" to 1))
+        assertEquals(mapOf("b#0" to 3, "c#10" to 1), Dots.counts.toMap())
+        val ig = app("com.instagram.android", "Instagram")
+        Dots.set(mapOf(Dots.keyOf(ig.pkg, ig.user.hashCode()) to 1))
+        assertTrue(Dots.has(ig)); assertFalse(Dots.has(app("x.y", "Other")))
+        Dots.set(emptyMap()); assertTrue(Dots.counts.isEmpty())
+    }
 }

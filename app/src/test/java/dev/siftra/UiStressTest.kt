@@ -368,4 +368,40 @@ class UiStressTest {
         shot("gemini-progress")
         click("Run in background"); assertFalse(s.progressVisible)
     }
+
+    /* ---------- 0.5.6: notification dots, Gestures & dots page, swipe down ---------- */
+
+    @Test fun dotsGesturesPage() {
+        start(HomeLayout.CARDS)
+        val s = model()
+        val insta = s.apps.first { it.label == "Instagram" }
+        rule.runOnIdle { Dots.set(mapOf(Dots.keyOf(insta.pkg, insta.user.hashCode()) to 2)) }
+        // swipe down on the clock: asks for the notification panel, must not open the drawer or crash
+        rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("Unread notifications in this group").fetchSemanticsNodes().isNotEmpty() }
+        shot("dots-home")
+        rule.onAllNodes(isRoot())[0].performTouchInput { swipeDown(startY = 250f, endY = 800f) }
+        rule.waitForIdle()
+        assertTrue(rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty())
+        // dots on the app and on its group in the drawer
+        rule.onNodeWithText("︿  All apps").performClick()
+        rule.waitUntil(5_000) { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodes(hasSetTextAction())[0].performTextInput("Instagram")
+        rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("New notifications").fetchSemanticsNodes().isNotEmpty() }
+        shot("dots")
+        // turning dots off hides them everywhere
+        rule.runOnIdle { s.setDotsOn(false) }
+        rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("New notifications").fetchSemanticsNodes().isEmpty() }
+        rule.runOnIdle { s.setDotsOn(true); Dots.set(emptyMap()) }
+        back(); back()
+        // Settings › Gestures & dots
+        rule.onNodeWithText("⋯").performClick(); rule.waitUntil(5_000) { exists("Gestures & dots") }
+        rule.onAllNodesWithText("Gestures & dots")[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.waitUntil(5_000) { exists("Allow notification access") }
+        assertTrue(exists("Turn on Siftra's lock service") && exists("Open App info"))
+        rule.onNodeWithContentDescription("Swipe down").performClick(); rule.waitForIdle()
+        assertFalse(s.swipeDown)
+        shot("gestures-page")
+        rule.onNodeWithContentDescription("Swipe down").performClick(); rule.waitForIdle()
+        assertTrue(s.swipeDown)
+    }
 }

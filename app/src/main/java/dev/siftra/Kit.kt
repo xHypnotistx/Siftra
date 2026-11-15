@@ -66,6 +66,8 @@ val GLYPHS = mapOf(
     "music" to "M9 18V6l10-2v12M7 16a2 2 0 1 0 0 4a2 2 0 1 0 0-4", "cam" to "M3 7h18v12H3zM12 10a3 3 0 1 0 0 6a3 3 0 1 0 0-6",
     "pin" to "M12 21s6-6 6-11a6 6 0 0 0-12 0c0 5 6 11 6 11zM12 8a2 2 0 1 0 0 4a2 2 0 1 0 0-4", "grid" to "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
     "bolt" to "M13 3L5 14h6l-1 7 8-11h-6z", "note2" to "M6 4h9l3 3v13H6zM9 11h6M9 15h6", "folder" to "M3 7h6l2 2h10v10H3z",
+    "bell" to "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0", "lock" to "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3",
+    "hand" to "M9 12V5.5a1.5 1.5 0 0 1 3 0V11M12 10.5V4.5a1.5 1.5 0 0 1 3 0v6M15 10.5V6.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 6.5-6 6.5-2.5 0-4-1.2-5.2-3L4.5 13.6a1.5 1.5 0 0 1 2.4-1.8L9 14",
 )
 
 private val pathCache = HashMap<String, Path>()

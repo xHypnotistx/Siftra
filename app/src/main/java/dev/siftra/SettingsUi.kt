@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.launch
 
-enum class SPage { HOME, LOOK, LAYOUT, SORTING, APPS, ABOUT, FAVORITES, MOSTUSED }
+enum class SPage { HOME, LOOK, LAYOUT, SORTING, APPS, GESTURES, ABOUT, FAVORITES, MOSTUSED }
 
 val Group.glyph get() = when (this) {
     Group.MINE -> "sparkle"; Group.GOV -> "shield"; Group.INSPIRE -> "star"; Group.SAMSUNG -> "apps"; Group.GOOGLE -> "globe"
@@ -53,13 +53,13 @@ private fun ago(ms: Long): String {
 }
 
 @Composable
-private fun Page(content: @Composable ColumnScope.() -> Unit) {
+internal fun Page(content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().navigationBarsPadding()
         .padding(horizontal = 20.dp).padding(top = 14.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
 }
 
 @Composable
-private fun Header(title: String, onBack: (() -> Unit)?, right: @Composable () -> Unit = {}) {
+internal fun Header(title: String, onBack: (() -> Unit)?, right: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) SBack(onBack)
         Spacer(Modifier.weight(1f)); right()
@@ -85,6 +85,7 @@ fun SettingsScreen(s: Siftra, isHome: Boolean, start: SPage = SPage.HOME, onClos
             SPage.APPS -> AppsPage(s, { page = it }) { page = SPage.HOME }
             SPage.FAVORITES -> FavoritesPage(s) { page = SPage.APPS }
             SPage.MOSTUSED -> MostUsedPage(s) { page = SPage.APPS }
+            SPage.GESTURES -> GesturesPage(s) { page = SPage.HOME }
             SPage.ABOUT -> AboutPage(s) { page = SPage.HOME }
         }
     }
@@ -113,11 +114,13 @@ private fun SettingsHome(s: Siftra, isHome: Boolean, onClose: () -> Unit, onSetH
         SRow(2, "layers", "Home layout", "${s.layout.title} · 5 layouts", 1, onClick = { go(SPage.LAYOUT) })
         SRow(3, "sparkle", "Sorting & Gemini", "${rules + ai + manual} apps · $ai sorted by Gemini", 2, onClick = { go(SPage.SORTING) })
         SRow(4, "apps", "Apps", "${s.hidden.size} hidden · ${s.manualMoves()} manual moves", 0, onClick = { go(SPage.APPS) })
-        SRow(5, "info", "About", "Version ${BuildConfigLite.VERSION} · open source", 1, onClick = { go(SPage.ABOUT) })
+        SRow(5, "hand", "Gestures & dots", listOf(if (s.dots) "Dots" else null, if (s.swipeDown) "Swipe down" else null, if (s.doubleTapLock) "Double-tap lock" else null)
+            .filterNotNull().joinToString(" · ").ifEmpty { "All off" }, 2, onClick = { go(SPage.GESTURES) })
+        SRow(6, "info", "About", "Version ${BuildConfigLite.VERSION} · open source", 1, onClick = { go(SPage.ABOUT) })
     }
 }
 
-object BuildConfigLite { const val VERSION = "0.5.5" }
+object BuildConfigLite { const val VERSION = "0.5.6" }
 
 @Composable
 private fun LookPage(s: Siftra, back: () -> Unit) = Page {

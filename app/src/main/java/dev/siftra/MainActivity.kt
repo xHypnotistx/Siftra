@@ -46,6 +46,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -205,7 +208,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                                 .padding(20.dp)
                         ) {
                             Text(g.title, 30.sp, display = true)
-                            Text("${list.size} apps", 13.sp, alpha = 0.7f)
+                            Row(verticalAlignment = Alignment.CenterVertically) { Text("${list.size} apps", 13.sp, alpha = 0.7f); GroupDot(list) }
                             Spacer(Modifier.height(14.dp))
                             LazyVerticalGrid(GridCells.Fixed(4), Modifier.heightIn(max = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.62f).dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -267,22 +270,32 @@ private fun Home(
     onDrawer: (Boolean) -> Unit, onSettings: () -> Unit, onOrganize: () -> Unit, onSetHome: () -> Unit,
     overlay: Boolean = false, onGroupLong: (Group) -> Unit = {},
 ) {
+    val ctx = LocalContext.current
+    val swipeDownOn by rememberUpdatedState(s.swipeDown && !overlay)
     val swipeUp = Modifier.pointerInput(Unit) {
         var acc = 0f
-        detectVerticalDragGestures(onDragStart = { acc = 0f }, onDragEnd = { if (acc < -120f) onDrawer(false) }) { _, dy -> acc += dy }
+        detectVerticalDragGestures(onDragStart = { acc = 0f }, onDragEnd = {
+            if (acc < -120f) onDrawer(false) else if (acc > 120f && swipeDownOn) Gestures.openNotifications(ctx)
+        }) { _, dy -> acc += dy }
     }
     val pullToDrawer = remember {
         object : NestedScrollConnection {
-            var acc = 0f
+            var up = 0f; var down = 0f
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y < 0) { acc += available.y; if (acc < -160f) { acc = 0f; onDrawer(false) } } else acc = 0f
+                if (available.y < 0) { down = 0f; up += available.y; if (up < -160f) { up = 0f; onDrawer(false) } }
+                else if (available.y > 0 && source == NestedScrollSource.UserInput && swipeDownOn) {   // pulled down past the top
+                    up = 0f; down += available.y; if (down > 160f) { down = 0f; Gestures.openNotifications(ctx) }
+                } else { up = 0f; down = 0f }
                 return Offset.Zero
             }
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity { down = 0f; return androidx.compose.ui.unit.Velocity.Zero }
         }
     }
+    // double-tap empty space → lock (only once Siftra's lock service is on; children consume their own taps)
+    val lockTap = if (s.doubleTapLock && !overlay) Modifier.pointerInput(Unit) { detectTapGestures(onDoubleTap = { LockService.lock() }) } else Modifier
     val sections = s.sections(s.showExtras)
 
-    Column(modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 18.dp)) {
+    Column(modifier.fillMaxSize().then(lockTap).statusBarsPadding().navigationBarsPadding().padding(horizontal = 18.dp)) {
         // header: clock + actions
         Row(swipeUp.padding(top = 18.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             ClockView(s.clockStyle, Modifier.weight(1f).noRipple { s.nextClock() })
@@ -349,6 +362,7 @@ private fun GroupCard(g: Group, list: List<AppItem>, modifier: Modifier, onClick
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(g.title, 19.sp, display = true, modifier = Modifier.weight(1f), maxLines = 1)
+            GroupDot(list)
             Text("${list.size}", 12.sp, FontWeight.SemiBold, color = LocalUi.current.accent)
         }
         Spacer(Modifier.weight(1f))
@@ -407,14 +421,20 @@ private fun CircleBtn(glyph: String, onClick: () -> Unit) {
 
 /** App icon: original, or Material You themed (monochrome glyph on an accent disc). */
 @Composable
-fun AppGlyph(a: AppItem, size: Dp) {
+fun AppGlyph(a: AppItem, size: Dp, dot: Boolean = true) {
     val ui = LocalUi.current
     val mono = a.mono
-    if (ui.themedIcons && mono != null) {
-        Box(Modifier.size(size).clip(CircleShapeLike).background(ui.container), contentAlignment = Alignment.Center) {
-            Image(mono, a.label, Modifier.size(size), colorFilter = ColorFilter.tint(ui.onContainer))
+    Box(contentAlignment = Alignment.TopEnd) {
+        if (ui.themedIcons && mono != null) {
+            Box(Modifier.size(size).clip(CircleShapeLike).background(ui.container), contentAlignment = Alignment.Center) {
+                Image(mono, a.label, Modifier.size(size), colorFilter = ColorFilter.tint(ui.onContainer))
+            }
+        } else Image(a.icon, a.label, Modifier.size(size))
+        if (dot && Dots.show) {
+            val has by remember(a.key) { derivedStateOf { Dots.has(a) } }
+            if (has) AppDot(size, Modifier.offset(x = 2.dp, y = (-2).dp).semantics { contentDescription = "New notifications" })
         }
-    } else Image(a.icon, a.label, Modifier.size(size))
+    }
 }
 
 @Composable

@@ -218,6 +218,14 @@ class Siftra(private val ctx: Context) {
     fun setYouColors(v: Boolean) { you = v; prefs.edit().putBoolean("you", v).apply() }
     fun setThemedIcons(v: Boolean) { themed = v; prefs.edit().putBoolean("themed", v).apply() }
 
+    // Gestures & dots (0.5.6)
+    var dots by mutableStateOf(prefs.getBoolean("dots", true)); private set
+    var swipeDown by mutableStateOf(prefs.getBoolean("swipeDown", true)); private set
+    var doubleTapLock by mutableStateOf(prefs.getBoolean("doubleTapLock", true)); private set
+    fun setDotsOn(v: Boolean) { dots = v; Dots.show = v; prefs.edit().putBoolean("dots", v).apply() }
+    fun setSwipeDownOn(v: Boolean) { swipeDown = v; prefs.edit().putBoolean("swipeDown", v).apply() }
+    fun setDoubleTapLockOn(v: Boolean) { doubleTapLock = v; prefs.edit().putBoolean("doubleTapLock", v).apply() }
+
     var layout by mutableStateOf(HomeLayout.entries.firstOrNull { it.name == prefs.getString("layout", "CARDS") } ?: HomeLayout.CARDS); private set
     /** Picking a layout also applies its matching backdrop, glass and clock (all still changeable). */
     fun setHomeLayout(l: HomeLayout) {
@@ -256,6 +264,7 @@ class Siftra(private val ctx: Context) {
     }
 
     init {
+        Dots.show = dots
         loadPhoto()
         counts = prefs.all.filterKeys { it.startsWith("lc|") }.mapNotNull { (k, v) -> (v as? Int)?.let { k.drop(3) to it } }.toMap()
         la.registerCallback(object : LauncherApps.Callback() {

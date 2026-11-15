@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.6 — Notification dots, swipe down, double-tap to lock
+
+- **Notification dots.** A dot on every app with unread notifications, and a dot next to the count of any group holding one.
+  - It follows the same rules as the stock launcher: it respects each app's "show dot" setting, and skips group headers, empty notifications and ongoing legacy ones.
+  - Siftra only counts notifications; it never reads or stores what they say.
+  - Needs notification access once.
+- **Swipe down for notifications** on the clock, or on the groups when they're scrolled to the top. On by default.
+- **Double-tap empty space to lock.** Needs Siftra's lock service, a minimal accessibility service that asks for no events and can't read the screen. Fingerprint and face unlock keep working. When the service is on, it also makes swipe-down work on every phone.
+- New **Settings › Gestures & dots** page. It walks through both permissions, including the "Allow restricted settings" step that APK installs need on Android 13 and later, and re-checks them when you come back from system settings.
+- Tests: 27 passing, including dots on apps and groups, turning dots off, the swipe-down gesture and the new settings page.
+
 ## 0.5.5 — Speed & battery
 
 - **Glass is much cheaper to draw.** The backdrop is blurred once, at quarter size, and every glass panel samples that copy. Before, each card, row and sheet blurred its own piece of the backdrop on every frame. The frosted/ribbed texture still runs per panel at full sharpness, with a lighter noise function.

@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -21,5 +22,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Notification dots: counts unread notifications per app; nothing is read or stored. -->
+        <service android:name=".DotService" android:exported="true" android:label="@string/dots_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Double-tap to lock / swipe down for notifications. -->
+        <service android:name=".LockService" android:exported="true" android:label="@string/a11y_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/siftra_accessibility" />
+        </service>
     </application>
 </manifest>

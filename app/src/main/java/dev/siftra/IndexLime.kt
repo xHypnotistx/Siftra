@@ -283,6 +283,7 @@ fun IndexLime(
                                 T("DRAG ↓", 10.5.sp, weight = FontWeight.SemiBold, color = Color(0xFF0A0B08), tracking = 1.sp)
                             }
                         }
+                        GroupDot(list, Modifier.padding(bottom = 12.dp))
                         T("${list.size}", 12.sp, Modifier.padding(bottom = 8.dp), FontWeight.SemiBold, color = if (lead) Lime else Color(0xFFB8BDAA))
                     }
                     LimeDrawer(list, open == g, dragging == g, dragPx, onLaunch, onLong) { fulls[g] = it }

@@ -194,7 +194,7 @@ private fun Browse(s: Siftra, view: DrawerView, setView: (DrawerView) -> Unit, o
             }
             LazyColumn(state = listState, contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 24.dp)) {
                 sections.forEachIndexed { gi, (g, list) ->
-                    item(key = "h_${g.name}") { SectionHeader(gi + 1, g.title, list.size, Modifier.animateItem().groupClick({}, { onGroupLong(g) })) }
+                    item(key = "h_${g.name}") { SectionHeader(gi + 1, g.title, list, Modifier.animateItem().groupClick({}, { onGroupLong(g) })) }
                     item(key = "g_${g.name}") {
                         Column(Modifier.animateItem().fillMaxWidth().glass(st.radius).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             list.chunked(4).forEach { row ->
@@ -212,7 +212,7 @@ private fun Browse(s: Siftra, view: DrawerView, setView: (DrawerView) -> Unit, o
 }
 
 @Composable
-private fun SectionHeader(n: Int, title: String, count: Int, modifier: Modifier = Modifier) {
+private fun SectionHeader(n: Int, title: String, list: List<AppItem>, modifier: Modifier = Modifier) {
     val ui = LocalUi.current
     val st = LocalRowStyle.current
     Row(modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 18.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
@@ -223,7 +223,8 @@ private fun SectionHeader(n: Int, title: String, count: Int, modifier: Modifier 
             else -> T(title, 24.sp, display = true)
         }
         Spacer(Modifier.weight(1f))
-        T("$count", 12.sp, weight = FontWeight.SemiBold, color = ui.accent)
+        GroupDot(list, Modifier.padding(bottom = 5.dp))
+        T("${list.size}", 12.sp, weight = FontWeight.SemiBold, color = ui.accent)
     }
 }
 

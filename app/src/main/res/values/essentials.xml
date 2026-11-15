@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_label">Siftra lock &amp; notifications</string>
+    <string name="a11y_summary">Double-tap the home screen to lock, swipe down for notifications</string>
+    <string name="a11y_description">Lets Siftra lock the phone when you double-tap empty space on its home screen, and open the notification panel when you swipe down. Siftra can\'t see what\'s on the screen or what you type, and it doesn\'t collect anything.</string>
+    <string name="dots_label">Siftra notification dots</string>
+</resources>
