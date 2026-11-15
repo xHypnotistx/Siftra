@@ -9,6 +9,9 @@
 - **Home screen.** Frosted group cards that expand into a full panel with a container-transform animation. A shelf you swipe left and right between **Most used** and **Favorites**.
 - **App drawer.** Swipe up. Grouped sections, jump chips, instant search.
 - **Organize anywhere.** The ⟲ button re-sorts on the home screen and in the drawer. Long-press any app to favorite, move, hide, see app info or uninstall.
+- **Material You.** Accent colors, a "You" backdrop and themed monochrome icons, all from your system palette.
+- **Classy type.** Instrument Serif and Instrument Sans (SIL OFL, see `OFL-fonts.txt`), plus five clock styles: Classic, Stacked, Split, Analog and Minimal. Tap the clock to switch.
+- **Textured glass.** Blur plus an AGSL frosted or ribbed distortion plus film grain, over Siftra's animated backdrops or your own photo.
 - **Real blur.** The wallpaper blurs behind open panels (Android 12+ cross-window blur).
 - **No tracking.** "Most used" is counted on-device only.
 

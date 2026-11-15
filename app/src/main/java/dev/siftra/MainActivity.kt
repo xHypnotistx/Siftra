@@ -136,14 +136,23 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
 
     val time = remember { mutableFloatStateOf(0f) }
     val screen = remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
-    val animated = s.motion && s.backdrop in setOf(Backdrop.AURORA, Backdrop.EMBER, Backdrop.MONO)
+    val animated = s.motion && s.backdrop in setOf(Backdrop.AURORA, Backdrop.YOU, Backdrop.EMBER, Backdrop.MONO)
     if (animated) LaunchedEffect(Unit) {
         val start = withFrameNanos { it }
         while (true) withFrameNanos { time.floatValue = (it - start) / 1e9f }
     }
-    val env = remember(s.backdrop, s.photo, s.ribbed) { GlassEnv(s.backdrop, s.photo, s.ribbed, time, screen) }
+    val youCtx = androidx.compose.ui.platform.LocalContext.current
+    val env = remember(s.backdrop, s.photo, s.ribbed) {
+        fun c(id: Int) = Color(youCtx.getColor(id))
+        GlassEnv(s.backdrop, s.photo, s.ribbed, time, screen,
+            you = listOf(c(android.R.color.system_accent1_500), c(android.R.color.system_accent3_400),
+                c(android.R.color.system_accent2_400), c(android.R.color.system_accent1_800)),
+            youBase = c(android.R.color.system_neutral1_1000))
+    }
 
-    CompositionLocalProvider(LocalGlass provides env) {
+    val ctxT = androidx.compose.ui.platform.LocalContext.current
+    val ui = remember(s.you, s.classy, s.themed) { youTheme(ctxT, s.you, s.classy, s.themed) }
+    CompositionLocalProvider(LocalGlass provides env, LocalUi provides ui) {
     SharedTransitionLayout(Modifier.fillMaxSize().onSizeChanged { screen.value = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }) {
         val sts = this
         Box(Modifier.fillMaxSize()) {
@@ -181,7 +190,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                                 .noRipple { }
                                 .padding(20.dp)
                         ) {
-                            Text(g.title, 24.sp, FontWeight.SemiBold)
+                            Text(g.title, 30.sp, display = true)
                             Text("${list.size} apps", 13.sp, alpha = 0.7f)
                             Spacer(Modifier.height(14.dp))
                             LazyVerticalGrid(GridCells.Fixed(4), Modifier.heightIn(max = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.62f).dp),
@@ -242,7 +251,7 @@ private fun Home(
     Column(modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 18.dp)) {
         // header: clock + actions
         Row(swipeUp.padding(top = 18.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Clock(Modifier.weight(1f))
+            ClockView(s.clockStyle, Modifier.weight(1f).noRipple { s.nextClock() })
             CircleBtn("⟲", onOrganize); Spacer(Modifier.width(8.dp)); CircleBtn("⋯", onSettings)
         }
         Row(Modifier.fillMaxWidth().glass(22.dp).clickable { onDrawer(true) }.padding(horizontal = 18.dp, vertical = 13.dp)) {
@@ -303,14 +312,14 @@ private fun GroupCard(g: Group, list: List<AppItem>, modifier: Modifier, onClick
             .padding(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(g.title, 14.sp, FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
-            Text("${list.size}", 12.sp, alpha = 0.6f)
+            Text(g.title, 19.sp, display = true, modifier = Modifier.weight(1f), maxLines = 1)
+            Text("${list.size}", 12.sp, FontWeight.SemiBold, color = LocalUi.current.accent)
         }
         Spacer(Modifier.weight(1f))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             list.take(4).chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { Image(it.icon, it.label, Modifier.size(44.dp)) }
+                    row.forEach { AppGlyph(it, 44.dp) }
                 }
             }
         }
@@ -331,7 +340,7 @@ private fun Shelf(s: Siftra, swipeUp: Modifier, onLaunch: (AppItem, Rect?) -> Un
             Spacer(Modifier.weight(1f))
             repeat(2) { i ->
                 val w by animateDpAsState(if (pager.currentPage == i) 16.dp else 6.dp, label = "dot")
-                Box(Modifier.padding(start = 4.dp).size(w, 6.dp).clip(CircleShapeLike).background(Color.White.copy(alpha = if (pager.currentPage == i) 0.9f else 0.4f)))
+                Box(Modifier.padding(start = 4.dp).size(w, 6.dp).clip(CircleShapeLike).background(if (pager.currentPage == i) LocalUi.current.accent else Color.White.copy(alpha = 0.35f)))
             }
         }
         HorizontalPager(pager, Modifier.fillMaxWidth().height(92.dp).padding(top = 8.dp)) { page ->
@@ -389,7 +398,7 @@ private fun Drawer(s: Siftra, focusSearch: Boolean, onClose: () -> Unit, onLaunc
                 sections.forEach { (g, list) ->
                     item(key = "h_${g.name}") {
                         Row(Modifier.padding(start = 6.dp, top = 16.dp, bottom = 10.dp).animateItem(), verticalAlignment = Alignment.Bottom) {
-                            Text(g.title, 18.sp, FontWeight.SemiBold)
+                            Text(g.title, 24.sp, display = true)
                             Spacer(Modifier.width(8.dp)); Text("${list.size}", 12.sp, alpha = 0.55f)
                         }
                     }
@@ -418,26 +427,25 @@ private val CircleShapeLike = RoundedCornerShape(50)
 
 @Composable
 private fun Text(t: String, size: androidx.compose.ui.unit.TextUnit, weight: FontWeight = FontWeight.Normal,
-                 alpha: Float = 1f, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE, center: Boolean = false) {
-    androidx.compose.foundation.text.BasicText(
-        t, modifier, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
-        style = TextStyle(Color.White.copy(alpha = alpha), size, weight, shadow = txtShadow,
-            textAlign = if (center) TextAlign.Center else TextAlign.Start)
-    )
-}
+                 alpha: Float = 1f, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE, center: Boolean = false,
+                 display: Boolean = false, color: Color = Color.White) =
+    T(t, size, modifier, weight, color, alpha, display = display, maxLines = maxLines, center = center)
 
 @Composable
 private fun CircleBtn(glyph: String, onClick: () -> Unit) {
-    Box(Modifier.size(42.dp).glass(21.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Text(glyph, 18.sp) }
+    Box(Modifier.size(42.dp).glass(21.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Text(glyph, 18.sp, color = LocalUi.current.soft) }
 }
 
+/** App icon: original, or Material You themed (monochrome glyph on an accent disc). */
 @Composable
-private fun Clock(modifier: Modifier) {
-    val now by produceState(Date()) { while (true) { value = Date(); delay(10_000) } }
-    Column(modifier) {
-        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 52.sp, FontWeight.Light)
-        Text(SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(now), 14.sp, alpha = 0.8f)
-    }
+private fun AppGlyph(a: AppItem, size: Dp) {
+    val ui = LocalUi.current
+    val mono = a.mono
+    if (ui.themedIcons && mono != null) {
+        Box(Modifier.size(size).clip(CircleShapeLike).background(ui.container), contentAlignment = Alignment.Center) {
+            Image(mono, a.label, Modifier.size(size), colorFilter = ColorFilter.tint(ui.onContainer))
+        }
+    } else Image(a.icon, a.label, Modifier.size(size))
 }
 
 @Composable
@@ -452,7 +460,7 @@ private fun AppIcon(a: AppItem, onLaunch: (AppItem, Rect?) -> Unit, onLong: (App
                 onClick = { onLaunch(a, bounds) }),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Image(a.icon, a.label, Modifier.size(52.dp))
+        AppGlyph(a, 52.dp)
         Spacer(Modifier.height(5.dp))
         Text(a.label, 11.5.sp, maxLines = 1, center = true, modifier = Modifier.padding(horizontal = 2.dp))
     }
@@ -465,7 +473,7 @@ private fun AppMenu(s: Siftra, a: AppItem, onClose: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).noRipple(onClose), contentAlignment = Alignment.Center) {
         Column(Modifier.fillMaxWidth(0.82f).glass(28.dp, dark = true).noRipple { }.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(a.icon, null, Modifier.size(44.dp)); Spacer(Modifier.width(12.dp))
+                AppGlyph(a, 44.dp); Spacer(Modifier.width(12.dp))
                 Column {
                     Text(a.label, 17.sp, FontWeight.SemiBold, maxLines = 1)
                     Text(s.groupOf[a.key]?.title ?: "", 12.sp, alpha = 0.65f)
@@ -494,9 +502,12 @@ private fun ChipRow(items: List<String>, selected: String, onPick: (String) -> U
     Row(Modifier.padding(top = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items.forEach { t ->
             val on = t == selected
-            Box(Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) Color(0x40FFFFFF) else Color(0x14FFFFFF))
-                .border(1.dp, Color(if (on) 0x99FFFFFF else 0x26FFFFFF), RoundedCornerShape(14.dp))
-                .clickable { onPick(t) }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text(t, 13.sp) }
+            val ui = LocalUi.current
+            Box(Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) ui.container else Color(0x14FFFFFF))
+                .border(1.dp, if (on) ui.accent else Color(0x26FFFFFF), RoundedCornerShape(14.dp))
+                .clickable { onPick(t) }.padding(horizontal = 12.dp, vertical = 7.dp)) {
+                Text(t, 13.sp, if (on) FontWeight.SemiBold else FontWeight.Normal, color = if (on) ui.onContainer else Color.White)
+            }
         }
     }
 }
@@ -513,7 +524,7 @@ private fun SettingsPanel(s: Siftra, onClose: () -> Unit, onSetHome: () -> Unit,
     Box(Modifier.fillMaxSize().noRipple { s.saveKey(key); onClose() }, contentAlignment = Alignment.Center) {
         Column(Modifier.fillMaxWidth(0.88f).heightIn(max = 640.dp).glass(30.dp, dark = true).noRipple { }
             .verticalScroll(rememberScrollState()).padding(20.dp)) {
-            Text("Siftra", 24.sp, FontWeight.SemiBold)
+            Text("Siftra", 32.sp, display = true)
             Text("Open-source launcher that sifts your apps into strata", 12.5.sp, alpha = 0.7f)
             Spacer(Modifier.height(16.dp))
             Text("Gemini key (sorts apps the rules can't place)", 13.sp, alpha = 0.8f)
@@ -541,6 +552,13 @@ private fun SettingsPanel(s: Siftra, onClose: () -> Unit, onSetHome: () -> Unit,
             ChipRow(listOf("Frosted", "Ribbed"), if (s.ribbed) "Ribbed" else "Frosted") { s.setRibbedGlass(it == "Ribbed") }
             Spacer(Modifier.height(6.dp))
             MenuRow((if (s.motion) "☑" else "☐") + "  Animated backdrop") { s.setMotionOn(!s.motion) }
+            Text("Clock  ·  tip: tap the clock to switch", 13.sp, alpha = 0.8f, modifier = Modifier.padding(top = 8.dp))
+            ChipRow(ClockStyle.entries.map { it.title }, s.clockStyle.title) { t -> s.setClock(ClockStyle.entries.first { it.title == t }) }
+            Text("Font", 13.sp, alpha = 0.8f, modifier = Modifier.padding(top = 10.dp))
+            ChipRow(listOf("Classy", "System"), if (s.classy) "Classy" else "System") { s.setClassyFont(it == "Classy") }
+            Spacer(Modifier.height(6.dp))
+            MenuRow((if (s.you) "☑" else "☐") + "  Material You colors") { s.setYouColors(!s.you) }
+            MenuRow((if (s.themed) "☑" else "☐") + "  Themed icons (Material You)") { s.setThemedIcons(!s.themed) }
             MenuRow((if (s.showExtras) "☑" else "☐") + "  Show Samsung Extras on home") { s.setExtras(!s.showExtras) }
             MenuRow("↺  Reset my manual moves") { onReset() }
             MenuRow("◌  Unhide all apps (${s.hidden.size})") { s.unhideAll() }

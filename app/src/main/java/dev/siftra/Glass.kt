@@ -30,7 +30,7 @@ import kotlin.math.sin
 
 /* ======================= backdrop ======================= */
 
-enum class Backdrop(val title: String) { AURORA("Aurora"), EMBER("Ember"), MONO("Mono"), PHOTO("Photo"), WALLPAPER("Wallpaper") }
+enum class Backdrop(val title: String) { AURORA("Aurora"), YOU("You"), EMBER("Ember"), MONO("Mono"), PHOTO("Photo"), WALLPAPER("Wallpaper") }
 
 private class Palette(val base: Color, val blobs: List<Color>)
 
@@ -44,6 +44,7 @@ private val palettes = mapOf(
 class GlassEnv(
     val mode: Backdrop, val photo: ImageBitmap?, val ribbed: Boolean,
     val time: State<Float>, val screen: State<Size>,
+    val you: List<Color> = emptyList(), val youBase: Color = Color.Black,
 )
 
 val LocalGlass = staticCompositionLocalOf<GlassEnv?> { null }
@@ -60,7 +61,7 @@ fun DrawScope.drawBackdrop(env: GlassEnv) {
             filterQuality = FilterQuality.Low)
         return
     }
-    val p = palettes[env.mode] ?: return
+    val p = if (env.mode == Backdrop.YOU) Palette(env.youBase, env.you) else palettes[env.mode] ?: return
     val t = env.time.value
     drawRect(p.base, size = scr)
     p.blobs.forEachIndexed { i, c ->
@@ -144,6 +145,9 @@ private val edge = Brush.verticalGradient(listOf(Color(0x80FFFFFF), Color(0x1AFF
  */
 fun Modifier.glass(r: Dp = 26.dp, strong: Boolean = false, dark: Boolean = false): Modifier = composed {
     val env = LocalGlass.current
+    val ui = LocalUi.current
+    val wash = if (ui.you) ui.accent.copy(alpha = 0.07f) else Color.Transparent
+    val rim = if (ui.you) Brush.verticalGradient(listOf(ui.soft.copy(alpha = 0.55f), Color(0x14FFFFFF))) else edge
     val shape = RoundedCornerShape(r)
     val real = env != null && env.mode != Backdrop.WALLPAPER && (env.mode != Backdrop.PHOTO || env.photo != null)
     val tint = when {
@@ -166,9 +170,9 @@ fun Modifier.glass(r: Dp = 26.dp, strong: Boolean = false, dark: Boolean = false
                     translate(-p.x, -p.y) { drawBackdrop(env) }
                 }
                 drawLayer(layer)
-                drawRect(tint); drawRect(sheen); drawRect(grain, alpha = 0.6f)
+                drawRect(tint); drawRect(wash); drawRect(sheen); drawRect(grain, alpha = 0.6f)
             }
         }
-    } else clipped.drawBehind { drawRect(tint); drawRect(sheen); drawRect(grain, alpha = 0.75f) }
-    painted.border(1.dp, edge, shape)
+    } else clipped.drawBehind { drawRect(tint); drawRect(wash); drawRect(sheen); drawRect(grain, alpha = 0.75f) }
+    painted.border(1.dp, rim, shape)
 }

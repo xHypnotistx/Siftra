@@ -47,6 +47,7 @@ enum class Group(val title: String) {
 class AppItem(
     val key: String, val pkg: String, val label: String, val icon: ImageBitmap,
     val component: ComponentName, val user: UserHandle, val info: ApplicationInfo,
+    val mono: ImageBitmap? = null,
 )
 
 /* ======================= Rules ======================= */
@@ -163,11 +164,21 @@ class Siftra(private val ctx: Context) {
     var showExtras by mutableStateOf(prefs.getBoolean("extras", false))
     var status by mutableStateOf("")
     var geminiKey by mutableStateOf(prefs.getString("key", "")!!)
-    var backdrop by mutableStateOf(Backdrop.entries.firstOrNull { it.name == prefs.getString("backdrop", "AURORA") } ?: Backdrop.AURORA); private set
+    var backdrop by mutableStateOf(Backdrop.entries.firstOrNull { it.name == prefs.getString("backdrop", "YOU") } ?: Backdrop.YOU); private set
     var ribbed by mutableStateOf(prefs.getBoolean("ribbed", false)); private set
     var motion by mutableStateOf(prefs.getBoolean("motion", true)); private set
     var photo by mutableStateOf<ImageBitmap?>(null); private set
     private val photoFile get() = java.io.File(ctx.filesDir, "backdrop.jpg")
+
+    var clockStyle by mutableStateOf(ClockStyle.entries.firstOrNull { it.name == prefs.getString("clock", "SPLIT") } ?: ClockStyle.SPLIT); private set
+    var classy by mutableStateOf(prefs.getBoolean("classy", true)); private set
+    var you by mutableStateOf(prefs.getBoolean("you", true)); private set
+    var themed by mutableStateOf(prefs.getBoolean("themed", true)); private set
+    fun setClock(c: ClockStyle) { clockStyle = c; prefs.edit().putString("clock", c.name).apply() }
+    fun nextClock() = setClock(ClockStyle.entries[(clockStyle.ordinal + 1) % ClockStyle.entries.size])
+    fun setClassyFont(v: Boolean) { classy = v; prefs.edit().putBoolean("classy", v).apply() }
+    fun setYouColors(v: Boolean) { you = v; prefs.edit().putBoolean("you", v).apply() }
+    fun setThemedIcons(v: Boolean) { themed = v; prefs.edit().putBoolean("themed", v).apply() }
 
     fun setBackdropMode(b: Backdrop) { backdrop = b; prefs.edit().putString("backdrop", b.name).apply() }
     fun setRibbedGlass(v: Boolean) { ribbed = v; prefs.edit().putBoolean("ribbed", v).apply() }
@@ -225,8 +236,15 @@ class Siftra(private val ctx: Context) {
         val d = getBadgedIcon(0)
         val b = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
         d.setBounds(0, 0, px, px); d.draw(Canvas(b))
+        // Material You themed icon: the adaptive icon's monochrome layer (Android 13+), framed to the visible area.
+        val mono = if (android.os.Build.VERSION.SDK_INT >= 33) try {
+            (getIcon(0) as? android.graphics.drawable.AdaptiveIconDrawable)?.monochrome?.let { md ->
+                val mb = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+                md.setBounds(-px / 4, -px / 4, px + px / 4, px + px / 4); md.draw(Canvas(mb)); mb.asImageBitmap()
+            }
+        } catch (_: Exception) { null } else null
         return AppItem("${componentName.flattenToShortString()}#${user.hashCode()}", componentName.packageName,
-            label.toString(), b.asImageBitmap(), componentName, user, applicationInfo)
+            label.toString(), b.asImageBitmap(), componentName, user, applicationInfo, mono)
     }
 
     private fun override(a: AppItem) = prefs.getString("ov|${a.pkg}", null)?.let { n -> Group.entries.firstOrNull { it.name == n } }
