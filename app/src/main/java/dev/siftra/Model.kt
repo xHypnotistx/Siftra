@@ -180,6 +180,19 @@ class Siftra(private val ctx: Context) {
     fun setYouColors(v: Boolean) { you = v; prefs.edit().putBoolean("you", v).apply() }
     fun setThemedIcons(v: Boolean) { themed = v; prefs.edit().putBoolean("themed", v).apply() }
 
+    var layout by mutableStateOf(HomeLayout.entries.firstOrNull { it.name == prefs.getString("layout", "CARDS") } ?: HomeLayout.CARDS); private set
+    /** Picking a layout also applies its matching backdrop, glass and clock (all still changeable). */
+    fun setHomeLayout(l: HomeLayout) {
+        layout = l; prefs.edit().putString("layout", l.name).apply()
+        when (l) {
+            HomeLayout.STRATA -> { setBackdropMode(Backdrop.YOU); setRibbedGlass(false); setClock(ClockStyle.SPLIT) }
+            HomeLayout.MONOLITH -> { setBackdropMode(Backdrop.EMBER); setRibbedGlass(true); setClock(ClockStyle.MONOLITH) }
+            HomeLayout.ORBIT -> { setBackdropMode(Backdrop.PASTEL); setRibbedGlass(false); setClock(ClockStyle.ANALOG) }
+            HomeLayout.INDEX -> { setBackdropMode(Backdrop.MONO); setRibbedGlass(true); setClock(ClockStyle.MINIMAL) }
+            HomeLayout.CARDS -> {}
+        }
+    }
+
     fun setBackdropMode(b: Backdrop) { backdrop = b; prefs.edit().putString("backdrop", b.name).apply() }
     fun setRibbedGlass(v: Boolean) { ribbed = v; prefs.edit().putBoolean("ribbed", v).apply() }
     fun setMotionOn(v: Boolean) { motion = v; prefs.edit().putBoolean("motion", v).apply() }

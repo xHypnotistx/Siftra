@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.*
@@ -66,23 +67,38 @@ fun youTheme(ctx: Context, you: Boolean, classy: Boolean, themedIcons: Boolean):
 
 val LocalUi = staticCompositionLocalOf<UiTheme> { error("no theme") }
 
+/** Text colour of the home layer: white on dark backdrops, deep ink on the light Pastel one. */
+val LocalInk = staticCompositionLocalOf { Color.White }
+
+/** Darker accents that read well on a light backdrop. */
+fun lightVariant(ctx: Context, b: UiTheme): UiTheme {
+    fun c(id: Int) = Color(ctx.getColor(id))
+    return if (b.you) UiTheme(c(android.R.color.system_accent1_600), c(android.R.color.system_accent1_500), c(android.R.color.system_accent1_100),
+        c(android.R.color.system_accent1_800), c(android.R.color.system_accent3_600), c(android.R.color.system_accent2_600),
+        b.neutralDark, true, b.body, b.display, b.themedIcons)
+    else UiTheme(Color(0xFF5B4FD9), Color(0xFF7A6FF0), Color(0xFFE4E1FF), Color(0xFF2B2370), Color(0xFFD9468F), Color(0xFF0E8FB8),
+        b.neutralDark, false, b.body, b.display, b.themedIcons)
+}
+
 private val shadow = Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 8f)
 
 @Composable
 fun T(text: String, size: TextUnit, modifier: Modifier = Modifier, weight: FontWeight = FontWeight.Normal,
-      color: Color = Color.White, alpha: Float = 1f, display: Boolean = false, italic: Boolean = false,
-      maxLines: Int = Int.MAX_VALUE, center: Boolean = false, tracking: TextUnit = TextUnit.Unspecified) {
+      color: Color = Color.Unspecified, alpha: Float = 1f, display: Boolean = false, italic: Boolean = false,
+      maxLines: Int = Int.MAX_VALUE, center: Boolean = false, tracking: TextUnit = TextUnit.Unspecified,
+      lineHeight: TextUnit = TextUnit.Unspecified) {
     val ui = LocalUi.current
+    val col = if (color == Color.Unspecified) LocalInk.current else color
     BasicText(text, modifier, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-        style = TextStyle(color.copy(alpha = color.alpha * alpha), size, weight,
-            fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
-            fontFamily = if (display) ui.display else ui.body, shadow = shadow, letterSpacing = tracking,
+        style = TextStyle(col.copy(alpha = col.alpha * alpha), size, weight,
+            fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal, lineHeight = lineHeight,
+            fontFamily = if (display) ui.display else ui.body, shadow = if (col.luminance() > 0.5f) shadow else null, letterSpacing = tracking,
             textAlign = if (center) TextAlign.Center else TextAlign.Start))
 }
 
 /* ======================= clock styles ======================= */
 
-enum class ClockStyle(val title: String) { CLASSIC("Classic"), STACKED("Stacked"), SPLIT("Split"), ANALOG("Analog"), MINIMAL("Minimal") }
+enum class ClockStyle(val title: String) { MONOLITH("Monolith"), CLASSIC("Classic"), STACKED("Stacked"), SPLIT("Split"), ANALOG("Analog"), MINIMAL("Minimal") }
 
 @Composable
 fun ClockView(style: ClockStyle, modifier: Modifier = Modifier) {
@@ -91,7 +107,19 @@ fun ClockView(style: ClockStyle, modifier: Modifier = Modifier) {
     val loc = Locale.getDefault()
     fun f(p: String) = SimpleDateFormat(p, loc).format(now)
     val date = f("EEEE, d MMMM")
+    val ink = LocalInk.current
     when (style) {
+        ClockStyle.MONOLITH -> Row(modifier, verticalAlignment = Alignment.Top) {
+            Column {
+                T(f("HH"), 104.sp, display = true, lineHeight = 88.sp)
+                T(f("mm"), 104.sp, display = true, italic = true, color = ui.accent, lineHeight = 88.sp)
+            }
+            Spacer(Modifier.weight(1f))
+            Column(Modifier.padding(top = 112.dp, end = 4.dp), horizontalAlignment = Alignment.End) {
+                T(f("EEEE").uppercase(loc), 11.sp, weight = FontWeight.SemiBold, alpha = 0.75f, tracking = 2.4.sp)
+                T(f("d MMM"), 30.sp, display = true, italic = true)
+            }
+        }
         ClockStyle.CLASSIC -> Column(modifier) {
             T(f("HH:mm"), 64.sp, display = true)
             T(date, 15.sp, alpha = 0.85f, italic = true, display = true)
@@ -120,13 +148,13 @@ fun ClockView(style: ClockStyle, modifier: Modifier = Modifier) {
             val m = cal.get(Calendar.MINUTE); val h = cal.get(Calendar.HOUR) + m / 60f
             Canvas(Modifier.size(84.dp)) {
                 val r = size.minDimension / 2
-                drawCircle(Color.White.copy(alpha = 0.10f), r)
-                drawCircle(Color.White.copy(alpha = 0.45f), r, style = Stroke(1.dp.toPx()))
+                drawCircle(Color.White.copy(alpha = 0.18f), r)
+                drawCircle(Color.White.copy(alpha = 0.55f), r, style = Stroke(1.dp.toPx()))
                 for (i in 0 until 12) rotate(i * 30f) {
-                    drawLine(Color.White.copy(alpha = if (i % 3 == 0) 0.9f else 0.4f), Offset(center.x, center.y - r + 5.dp.toPx()),
+                    drawLine(ink.copy(alpha = if (i % 3 == 0) 0.9f else 0.4f), Offset(center.x, center.y - r + 5.dp.toPx()),
                         Offset(center.x, center.y - r + (if (i % 3 == 0) 11 else 8).dp.toPx()), 1.5.dp.toPx(), StrokeCap.Round)
                 }
-                rotate(h * 30f) { drawLine(Color.White, center, Offset(center.x, center.y - r * 0.5f), 3.dp.toPx(), StrokeCap.Round) }
+                rotate(h * 30f) { drawLine(ink, center, Offset(center.x, center.y - r * 0.5f), 3.dp.toPx(), StrokeCap.Round) }
                 rotate(m * 6f) { drawLine(ui.accent, center, Offset(center.x, center.y - r * 0.78f), 2.dp.toPx(), StrokeCap.Round) }
                 drawCircle(ui.accent, 3.dp.toPx())
             }

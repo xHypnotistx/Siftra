@@ -62,11 +62,11 @@ import java.util.Locale
 
 private val txtShadow = Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 8f)
 
-private fun Modifier.noRipple(onClick: () -> Unit) = composed {
+fun Modifier.noRipple(onClick: () -> Unit) = composed {
     clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
 }
 
-private val springy = spring<Float>(dampingRatio = 0.78f, stiffness = 420f)
+val springy = spring<Float>(dampingRatio = 0.78f, stiffness = 420f)
 
 class MainActivity : ComponentActivity() {
     private lateinit var s: Siftra
@@ -136,7 +136,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
 
     val time = remember { mutableFloatStateOf(0f) }
     val screen = remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
-    val animated = s.motion && s.backdrop in setOf(Backdrop.AURORA, Backdrop.YOU, Backdrop.EMBER, Backdrop.MONO)
+    val animated = s.motion && s.backdrop in setOf(Backdrop.AURORA, Backdrop.YOU, Backdrop.EMBER, Backdrop.MONO, Backdrop.PASTEL)
     if (animated) LaunchedEffect(Unit) {
         val start = withFrameNanos { it }
         while (true) withFrameNanos { time.floatValue = (it - start) / 1e9f }
@@ -164,6 +164,9 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
             val homeAlpha by animateFloatAsState(if (drawer || settings) 0f else if (openGroup != null) 0.3f else 1f, tween(240), label = "ha")
             val homeScale by animateFloatAsState(if (overlay) 0.95f else 1f, springy, label = "hs")
             val homeBlur by animateDpAsState(if (openGroup != null) 14.dp else 0.dp, tween(260), label = "hb")
+            val light = s.backdrop == Backdrop.PASTEL
+            val homeUi = remember(ui, light) { if (light) lightVariant(ctxT, ui) else ui }
+            CompositionLocalProvider(LocalInk provides (if (light) Color(0xFF231D4F) else Color.White), LocalUi provides homeUi) {
             Home(
                 s, sts, openGroup, Modifier.graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur),
                 isHome = isHome,
@@ -174,6 +177,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
                 onOrganize = { scope.launch { s.organize(force = true) } },
                 onSetHome = { askHome(); isHome = true },
             )
+            }
 
             // group panel (container-transforms out of its card)
             with(sts) {
@@ -265,7 +269,8 @@ private fun Home(
         }
         Spacer(Modifier.height(14.dp))
 
-        // group cards
+        // groups, in the chosen layout
+        if (s.layout == HomeLayout.CARDS) {
         LazyVerticalGrid(
             GridCells.Fixed(2), Modifier.weight(1f).nestedScroll(pullToDrawer),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -275,6 +280,7 @@ private fun Home(
                 CardSlot(sts, openGroup != g, g, list, Modifier.aspectRatio(1.12f).animateItem()) { onGroup(g) }
             }
         }
+        } else GroupsArea(s, sts, openGroup, sections, onGroup, onLaunch, onLong, pullToDrawer, Modifier.weight(1f))
 
         // shelf: Most used ⇄ Favorites
         Shelf(s, swipeUp, onLaunch, onLong)
@@ -423,12 +429,12 @@ private fun Drawer(s: Siftra, focusSearch: Boolean, onClose: () -> Unit, onLaunc
 
 /* ======================= pieces ======================= */
 
-private val CircleShapeLike = RoundedCornerShape(50)
+val CircleShapeLike = RoundedCornerShape(50)
 
 @Composable
-private fun Text(t: String, size: androidx.compose.ui.unit.TextUnit, weight: FontWeight = FontWeight.Normal,
+fun Text(t: String, size: androidx.compose.ui.unit.TextUnit, weight: FontWeight = FontWeight.Normal,
                  alpha: Float = 1f, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE, center: Boolean = false,
-                 display: Boolean = false, color: Color = Color.White) =
+                 display: Boolean = false, color: Color = Color.Unspecified) =
     T(t, size, modifier, weight, color, alpha, display = display, maxLines = maxLines, center = center)
 
 @Composable
@@ -438,7 +444,7 @@ private fun CircleBtn(glyph: String, onClick: () -> Unit) {
 
 /** App icon: original, or Material You themed (monochrome glyph on an accent disc). */
 @Composable
-private fun AppGlyph(a: AppItem, size: Dp) {
+fun AppGlyph(a: AppItem, size: Dp) {
     val ui = LocalUi.current
     val mono = a.mono
     if (ui.themedIcons && mono != null) {
@@ -449,7 +455,7 @@ private fun AppGlyph(a: AppItem, size: Dp) {
 }
 
 @Composable
-private fun AppIcon(a: AppItem, onLaunch: (AppItem, Rect?) -> Unit, onLong: (AppItem) -> Unit) {
+fun AppIcon(a: AppItem, onLaunch: (AppItem, Rect?) -> Unit, onLong: (AppItem) -> Unit) {
     val haptic = LocalHapticFeedback.current
     var bounds by remember { mutableStateOf<Rect?>(null) }
     Column(
@@ -538,6 +544,9 @@ private fun SettingsPanel(s: Siftra, onClose: () -> Unit, onSetHome: () -> Unit,
                 modifier = Modifier.padding(top = 6.dp).clickable {
                     ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
                 })
+            Spacer(Modifier.height(10.dp))
+            Text("Home layout", 13.sp, alpha = 0.8f)
+            ChipRow(HomeLayout.entries.map { it.title }, s.layout.title) { t -> s.setHomeLayout(HomeLayout.entries.first { it.title == t }) }
             Spacer(Modifier.height(10.dp))
             Text("Backdrop", 13.sp, alpha = 0.8f)
             val pick = androidx.activity.compose.rememberLauncherForActivityResult(

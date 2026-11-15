@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Dp
@@ -30,13 +31,14 @@ import kotlin.math.sin
 
 /* ======================= backdrop ======================= */
 
-enum class Backdrop(val title: String) { AURORA("Aurora"), YOU("You"), EMBER("Ember"), MONO("Mono"), PHOTO("Photo"), WALLPAPER("Wallpaper") }
+enum class Backdrop(val title: String) { AURORA("Aurora"), YOU("You"), EMBER("Ember"), MONO("Mono"), PASTEL("Pastel"), PHOTO("Photo"), WALLPAPER("Wallpaper") }
 
 private class Palette(val base: Color, val blobs: List<Color>)
 
 private val palettes = mapOf(
     Backdrop.AURORA to Palette(Color(0xFF05070F), listOf(Color(0xFF1F4BFF), Color(0xFF7B2CFF), Color(0xFF00C2FF), Color(0xFF2A1A8F))),
     Backdrop.EMBER to Palette(Color(0xFF070912), listOf(Color(0xFF14307A), Color(0xFFFF6A2B), Color(0xFFB0124A), Color(0xFF3FA9F5))),
+    Backdrop.PASTEL to Palette(Color(0xFFA29CF5), listOf(Color(0xFFFFFFFF), Color(0xFFFFC2D6), Color(0xFFC8F3FF), Color(0xFF7F86F2))),
     Backdrop.MONO to Palette(Color(0xFF0A0A0B), listOf(Color(0xFF8E8E93), Color(0xFF3A3A3F), Color(0xFFD9D9DE), Color(0xFF26262A))),
 )
 
@@ -146,11 +148,13 @@ private val edge = Brush.verticalGradient(listOf(Color(0x80FFFFFF), Color(0x1AFF
 fun Modifier.glass(r: Dp = 26.dp, strong: Boolean = false, dark: Boolean = false): Modifier = composed {
     val env = LocalGlass.current
     val ui = LocalUi.current
+    val light = LocalInk.current.luminance() < 0.5f
     val wash = if (ui.you) ui.accent.copy(alpha = 0.07f) else Color.Transparent
-    val rim = if (ui.you) Brush.verticalGradient(listOf(ui.soft.copy(alpha = 0.55f), Color(0x14FFFFFF))) else edge
+    val rim = if (light) Brush.verticalGradient(listOf(Color(0xA6FFFFFF), Color(0x40FFFFFF))) else if (ui.you) Brush.verticalGradient(listOf(ui.soft.copy(alpha = 0.55f), Color(0x14FFFFFF))) else edge
     val shape = RoundedCornerShape(r)
     val real = env != null && env.mode != Backdrop.WALLPAPER && (env.mode != Backdrop.PHOTO || env.photo != null)
     val tint = when {
+        light && !dark -> Brush.verticalGradient(listOf(Color(0x6BFFFFFF), Color(0x29FFFFFF)))
         dark && real -> Brush.verticalGradient(listOf(Color(0x59000000), Color(0x73000000)))
         dark -> Brush.verticalGradient(listOf(Color(0xD9202229), Color(0xE6141519)))
         real && strong -> Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF)))
