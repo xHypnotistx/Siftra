@@ -124,7 +124,12 @@ class LogicStressTest {
     @Test fun organizeWithoutKeyIsOfflineAndSafe() {
         val s = loaded(CATALOG.map { it.first } + filler(40))
         runBlocking { s.organize(force = true) }
-        assertEquals("Sorted ✓", s.status)
+        assertTrue(s.status, s.status.endsWith("add a Gemini key in Settings › Sorting to place them"))
+        assertNull("no progress screen without a key", s.progress)
+        // nothing left to place → a plain confirmation
+        val sorted = loaded(CATALOG.map { it.first }.filter { Rules.of(it) != null })
+        runBlocking { sorted.organize(force = true) }
+        assertEquals("Everything is sorted ✓", sorted.status)
     }
 
     @Test fun organizeWithBadKeyReportsInsteadOfCrashing() {

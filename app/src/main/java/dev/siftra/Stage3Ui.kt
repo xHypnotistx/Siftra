@@ -345,14 +345,16 @@ fun GeminiSortingScreen(s: Siftra, onHide: () -> Unit) {
             color = if (pr.error != null) Color(0xFFFF6B6B) else ui.accent, center = true)
         T("Only app names are sent, once. Everything else was sorted on your phone.", 12.5.sp, color = muted(), center = true)
         SCard(pad = 16.dp) {
-            pr.rows.forEachIndexed { i, (label, g) ->
+            val shown = pr.rows.take(60)     // a full re-sort can be hundreds of apps; the ring shows the total
+            shown.forEachIndexed { i, (label, g) ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     T(label, 14.sp, Modifier.weight(1f), maxLines = 1)
                     if (g != null) T("→ ${g.title}", 12.sp, weight = FontWeight.SemiBold, color = ui.accent)
                     else T(if (pr.running) "thinking…" else "—", 12.sp, color = muted())
                 }
-                if (i < pr.rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(LocalInk.current.copy(alpha = 0.08f)))
+                if (i < shown.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(LocalInk.current.copy(alpha = 0.08f)))
             }
+            if (pr.rows.size > shown.size) T("+ ${pr.rows.size - shown.size} more", 12.sp, Modifier.padding(top = 8.dp), color = muted())
         }
         SButton(if (pr.running) "Run in background" else "Done", !pr.running) { onHide() }
     }

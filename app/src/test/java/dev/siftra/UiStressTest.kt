@@ -42,7 +42,9 @@ class UiStressTest {
             println("START NUDGE $layout")
             val end = System.currentTimeMillis() + 6_000
             while (!shown() && System.currentTimeMillis() < end) org.robolectric.shadows.ShadowLooper.idleMainLooper(16, java.util.concurrent.TimeUnit.MILLISECONDS)
-            println("START NUDGE $layout → ${if (shown()) "rescued by advancing the looper clock" else "still stuck"}")
+            println("START NUDGE $layout → ${if (shown()) "rescued by advancing the looper clock" else "still stuck"}; " +
+                "choreographer frameScheduled=${runCatching { android.view.Choreographer::class.java.getDeclaredField("mFrameScheduled").apply { isAccessible = true }.get(android.view.Choreographer.getInstance()) }.getOrNull()}; " +
+                "compose: ${composeClockState()}")
         }
         try { rule.waitUntil(12_000) { shown() } }
         catch (t: Throwable) {
@@ -53,8 +55,28 @@ class UiStressTest {
         }
     }
 
+    private fun composeClockState(): String = runCatching {
+        var out = ""
+        scenario.onActivity {
+            val d = androidx.compose.ui.platform.AndroidUiDispatcher.CurrentThread[kotlin.coroutines.ContinuationInterceptor] as androidx.compose.ui.platform.AndroidUiDispatcher
+            val c = d.choreographer
+            val f = android.view.Choreographer::class.java.getDeclaredField("mFrameScheduled").apply { isAccessible = true }
+            val main = androidx.compose.ui.platform.AndroidUiDispatcher.Main[kotlin.coroutines.ContinuationInterceptor] as androidx.compose.ui.platform.AndroidUiDispatcher
+            out = "currentThread choreographer same=${c === android.view.Choreographer.getInstance()} frameScheduled=${f.get(c)}; " +
+                "main same=${main.choreographer === android.view.Choreographer.getInstance()} frameScheduled=${f.get(main.choreographer)}; " +
+                "looper idle=${org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).isIdle}; " +
+                "lifecycle=${it.lifecycle.currentState} scenario=${scenario.state} hasFocus=${it.hasWindowFocus()} " +
+                "attached=${it.window.decorView.isAttachedToWindow} recomposers=${androidx.compose.runtime.Recomposer.runningRecomposers.value.size}"
+        }
+        out
+    }.getOrElse { "n/a: $it" }
+
     @After fun stop() {
+        // Let any frame already scheduled run before and after closing. Robolectric drops queued messages between tests,
+        // and a Choreographer left with a frame "scheduled" then never schedules another, which freezes the next test.
+        repeat(3) { org.robolectric.shadows.ShadowLooper.idleMainLooper(20, java.util.concurrent.TimeUnit.MILLISECONDS) }
         try { if (::scenario.isInitialized) scenario.close() } catch (t: Throwable) { println("teardown (Robolectric surface): ${t.javaClass.simpleName}") }
+        repeat(3) { org.robolectric.shadows.ShadowLooper.idleMainLooper(20, java.util.concurrent.TimeUnit.MILLISECONDS) }
         TestHooks.apps = null; TestHooks.freezeMotion = false
     }
 
@@ -224,7 +246,7 @@ class UiStressTest {
         fun tap(t: String) { rule.onAllNodesWithText(t)[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle() }
         fun open(row: String) { tap(row); rule.waitForIdle() }
         fun backBtn() { rule.onAllNodesWithContentDescription("Back")[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle() }
-        rule.onNodeWithText("⋯").performClick()
+        rule.onNodeWithContentDescription("Settings").performClick()
         rule.waitForIdle()
         if (!exists("Sorting & Gemini")) println("TREE:\n" + rule.onAllNodes(isRoot())[0].printToString(maxDepth = 6).take(3000))
         rule.waitUntil(5_000) { exists("Sorting & Gemini") }
@@ -302,8 +324,8 @@ class UiStressTest {
                         0 -> rule.onAllNodesWithText(Group.entries[r.nextInt(Group.entries.size)].title)[0].performClick()
                         1 -> back()
                         2 -> rule.onNodeWithText("︿  All apps").performClick()
-                        3 -> rule.onNodeWithText("⋯").performClick()
-                        4 -> rule.onNodeWithText("⟲").performClick()
+                        3 -> rule.onNodeWithContentDescription("Settings").performClick()
+                        4 -> rule.onNodeWithContentDescription("Re-sort apps").performClick()
                         5 -> rule.onAllNodesWithText(CATALOG[r.nextInt(CATALOG.size)].first.label)[0].performTouchInput { longClick() }
                         6 -> {   // any clickable on screen, except the always-animating backdrop switch (never idles by design)
                             val m = hasClickAction() and !hasText("Animated backdrop", substring = true)
@@ -350,7 +372,7 @@ class UiStressTest {
         assertTrue(g.custom); assertEquals("Study", g.title); assertTrue(g in s.groupOrder)
         back(); rule.waitForIdle()
         // Settings › Sorting: tap the custom group → rename, then delete
-        rule.onNodeWithText("⋯").performClick(); rule.waitUntil(5_000) { exists("Sorting & Gemini") }
+        rule.onNodeWithContentDescription("Settings").performClick(); rule.waitUntil(5_000) { exists("Sorting & Gemini") }
         click("Sorting & Gemini"); rule.waitUntil(5_000) { exists("Study") }
         click("Study"); rule.waitUntil(5_000) { exists("Your group") }
         shot("group-edit")
@@ -409,7 +431,7 @@ class UiStressTest {
         rule.runOnIdle { s.setDotsOn(true); Dots.set(emptyMap()) }
         back(); back()
         // Settings › Gestures & dots
-        rule.onNodeWithText("⋯").performClick(); rule.waitUntil(5_000) { exists("Gestures & dots") }
+        rule.onNodeWithContentDescription("Settings").performClick(); rule.waitUntil(5_000) { exists("Gestures & dots") }
         rule.onAllNodesWithText("Gestures & dots")[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitUntil(5_000) { exists("Allow notification access") }
         assertTrue(exists("Turn on Siftra's lock service") && exists("Open App info"))
@@ -481,5 +503,25 @@ class UiStressTest {
             assertTrue("groups missing after a late load ($layout)", ok)
             scenario.close()
         }
+    }
+
+    /* ---------- 0.5.9 polish ---------- */
+
+    @Test fun polishLabelsStatusOrientation() {
+        start(HomeLayout.CARDS)
+        // every icon-only control on home has a spoken label
+        listOf("Settings", "Re-sort apps", "Search apps", "All apps").forEach { d ->
+            assertTrue("no label: $d", rule.onAllNodesWithContentDescription(d).fetchSemanticsNodes().isNotEmpty())
+        }
+        // Re-sort without a Gemini key says what's left instead of a false "Sorted ✓"
+        rule.onNodeWithContentDescription("Re-sort apps").performClick()
+        rule.waitUntil(5_000) { rule.onAllNodes(hasText("add a Gemini key", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        shot("status-no-key")
+        // the message clears itself
+        rule.mainClock.advanceTimeBy(4_000)
+        rule.waitUntil(8_000) { rule.onAllNodes(hasText("add a Gemini key", substring = true)).fetchSemanticsNodes().isEmpty() }
+        // phones keep home upright
+        scenario.onActivity { assertEquals(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_NOSENSOR, it.requestedOrientation) }
+        assertTrue(model().firstLoadDone)
     }
 }

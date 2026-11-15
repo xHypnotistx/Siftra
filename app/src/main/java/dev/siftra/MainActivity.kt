@@ -48,6 +48,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -96,12 +99,23 @@ class MainActivity : ComponentActivity(), WidgetConfigurator {
         enableEdgeToEdge()
         super.onCreate(b)
         s = Siftra(this)
+        lockOrientationOnPhones()
         setContent { Root(s, homePressed.value, ::setBlur, ::askDefaultHome) }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN) homePressed.value++   // Home pressed while on Siftra → close overlays
+    }
+
+    override fun onConfigurationChanged(c: android.content.res.Configuration) {
+        super.onConfigurationChanged(c)
+        lockOrientationOnPhones()
+    }
+
+    private fun lockOrientationOnPhones() {
+        requestedOrientation = if (resources.configuration.smallestScreenWidthDp < 600) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_NOSENSOR
+            else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
     private fun setBlur(r: Int) {
@@ -138,13 +152,13 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
     var isHome by remember { mutableStateOf(act.isDefaultHome()) }
 
     LaunchedEffect(s.reloadTick) { s.load() }
-    val homePager = rememberPagerState(initialPage = 1) { 2 }          // page 0 = widgets, page 1 = home
-    LaunchedEffect(homePressed) { homePager.animateScrollToPage(1) }
+    val pages = remember { HomePages() }                                 // home, with the widget page one swipe to the right
+    LaunchedEffect(homePressed) { pages.showHome() }
     WidgetHostLifecycle()
     val widgetCtx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) { WidgetHost.cleanOrphans(widgetCtx, s.widgets.map { it.id }.toSet()) }
     LaunchedEffect(homePressed) { openGroup = null; drawer = false; menuFor = null; settings = false; moveFor = null; editGroup = null; s.progressVisible = false }
-    LaunchedEffect(s.status) { if (s.status.endsWith("✓")) { delay(1800); s.status = "" } }
+    LaunchedEffect(s.status) { if (s.status.isNotEmpty() && !s.status.endsWith("…")) { delay(if (s.status.endsWith("✓")) 1800 else 3600); s.status = "" } }
 
     // Real frosted glass: blur the wallpaper behind the whole window while a panel is open.
     val overlay = openGroup != null || drawer || settings || !welcomed
@@ -198,11 +212,11 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
             val homeUi = remember(ui, light, lime) { if (lime) limeTheme(ui) else if (light) lightVariant(ctxT, ui) else ui }
             val ink = if (lime) LimeInk else if (light) Color(0xFF231D4F) else Color.White
             CompositionLocalProvider(LocalInk provides ink, LocalUi provides homeUi) {
-            HorizontalPager(homePager, Modifier.fillMaxSize().graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur)
+            SwipePages(pages, enabled = !overlay && menuFor == null,
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur)
                     .then(if (drawer || settings || !welcomed) Modifier.clearAndSetSemantics { } else Modifier),   // hidden home: inert
-                beyondViewportPageCount = 1, userScrollEnabled = !overlay && menuFor == null) { page ->
-            if (page == 0) WidgetsPage(s) { scope.launch { homePager.animateScrollToPage(1) } }
-            else Home(
+                widgets = { WidgetsPage(s) { scope.launch { pages.showHome() } } }) {
+            Home(
                 s, sts, openGroup, Modifier,
                 isHome = isHome,
                 onGroup = { lastGroup = it; openGroup = it },
@@ -216,7 +230,7 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
             )
             }
             }
-            BackHandler(homePager.currentPage == 0 && !overlay && menuFor == null) { scope.launch { homePager.animateScrollToPage(1) } }
+            BackHandler(pages.onWidgets && !overlay && menuFor == null) { scope.launch { pages.showHome() } }
 
             // group panel (container-transforms out of its card)
             with(sts) {
@@ -280,7 +294,8 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
             // status toast
             AnimatedVisibility(s.status.isNotEmpty(), Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 90.dp),
                 enter = fadeIn() + slideInVertically { it }, exit = fadeOut()) {
-                Box(Modifier.glass(18.dp, dark = true).padding(horizontal = 16.dp, vertical = 10.dp)) { Text(s.status, 13.sp) }
+                Box(Modifier.glass(18.dp, dark = true).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)) { Text(s.status, 13.sp) }
             }
         }
     }
@@ -324,10 +339,11 @@ private fun Home(
     Column(modifier.fillMaxSize().then(lockTap).statusBarsPadding().navigationBarsPadding().padding(horizontal = 18.dp)) {
         // header: clock + actions
         Row(swipeUp.padding(top = 18.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            ClockView(s.clockStyle, Modifier.weight(1f).noRipple { s.nextClock() })
-            CircleBtn("⟲", onOrganize); Spacer(Modifier.width(8.dp)); CircleBtn("⋯", onSettings)
+            ClockView(s.clockStyle, Modifier.weight(1f).noRipple { s.nextClock() }.semantics { onClick("Change clock style") { s.nextClock(); true } })
+            CircleBtn("⟲", "Re-sort apps", onOrganize); Spacer(Modifier.width(8.dp)); CircleBtn("⋯", "Settings", onSettings)
         }
-        Row(Modifier.fillMaxWidth().glass(22.dp).clickable { onDrawer(true) }.padding(horizontal = 18.dp, vertical = 13.dp)) {
+        Row(Modifier.fillMaxWidth().glass(22.dp).clickable { onDrawer(true) }.semantics(mergeDescendants = true) { contentDescription = "Search apps" }
+            .padding(horizontal = 18.dp, vertical = 13.dp)) {
             Text("⌕  Search apps", 15.sp, alpha = 0.75f)
         }
         if (!isHome) {
@@ -339,7 +355,9 @@ private fun Home(
         Spacer(Modifier.height(14.dp))
 
         // groups, in the chosen layout
-        if (s.layout == HomeLayout.CARDS) {
+        if (!s.firstLoadDone) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text("Sorting your apps…", 14.sp, alpha = 0.6f)
+        } else if (s.layout == HomeLayout.CARDS) {
         LazyVerticalGrid(
             GridCells.Fixed(2), Modifier.weight(1f).nestedScroll(pullToDrawer),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -353,7 +371,8 @@ private fun Home(
 
         // shelf: Most used ⇄ Favorites
         Shelf(s, swipeUp, onLaunch, onLong)
-        Box(swipeUp.fillMaxWidth().clickable { onDrawer(false) }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+        Box(swipeUp.fillMaxWidth().clickable { onDrawer(false) }.semantics(mergeDescendants = true) { contentDescription = "All apps" }
+            .padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
             Text("︿  All apps", 12.sp, alpha = 0.7f)
         }
     }
@@ -441,8 +460,9 @@ fun Text(t: String, size: androidx.compose.ui.unit.TextUnit, weight: FontWeight 
     T(t, size, modifier, weight, color, alpha, display = display, maxLines = maxLines, center = center)
 
 @Composable
-private fun CircleBtn(glyph: String, onClick: () -> Unit) {
-    Box(Modifier.size(42.dp).glass(21.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Text(glyph, 18.sp, color = LocalUi.current.soft) }
+private fun CircleBtn(glyph: String, label: String, onClick: () -> Unit) {
+    Box(Modifier.size(42.dp).glass(21.dp).clickable(onClick = onClick).clearAndSetSemantics { contentDescription = label; role = androidx.compose.ui.semantics.Role.Button
+        this.onClick(label) { onClick(); true } }, contentAlignment = Alignment.Center) { Text(glyph, 18.sp, color = LocalUi.current.soft) }
 }
 
 /** App icon: original, or Material You themed (monochrome glyph on an accent disc). */
@@ -453,9 +473,9 @@ fun AppGlyph(a: AppItem, size: Dp, dot: Boolean = true) {
     Box(contentAlignment = Alignment.TopEnd) {
         if (ui.themedIcons && mono != null) {
             Box(Modifier.size(size).clip(CircleShapeLike).background(ui.container), contentAlignment = Alignment.Center) {
-                Image(mono, a.label, Modifier.size(size), colorFilter = ColorFilter.tint(ui.onContainer))
+                Image(mono, null, Modifier.size(size), colorFilter = ColorFilter.tint(ui.onContainer))   // the name is always spoken by its label
             }
-        } else Image(a.icon, a.label, Modifier.size(size))
+        } else Image(a.icon, null, Modifier.size(size))
         if (dot && Dots.show) {
             val has by remember(a.key) { derivedStateOf { Dots.has(a) } }
             if (has) AppDot(size, Modifier.offset(x = 2.dp, y = (-2).dp).semantics { contentDescription = "New notifications" })

@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId = "dev.siftra"
         minSdk = 31; targetSdk = 36
-        versionCode = 14; versionName = "0.5.8"
+        versionCode = 15; versionName = "0.5.9"
     }
     buildTypes {
         release {

@@ -336,6 +336,8 @@ class Siftra(private val ctx: Context) {
     }
 
     var reloadTick by mutableStateOf(0); private set
+    /** False until the first app list is in, so home can say "Sorting your apps…" instead of looking empty. */
+    var firstLoadDone by mutableStateOf(false); private set
     private fun reloadSoon() { reloadTick++ }
     /** Packages whose icon/name must be read again on the next load; everything else is reused. */
     private val dirty = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -384,6 +386,7 @@ class Siftra(private val ctx: Context) {
         lastLoad = "${list.size} apps · ${fromDisk.get()} from cache · ${built.get()} read"
         apps = list
         regroup()
+        firstLoadDone = true
         if (TestHooks.apps == null && (built.get() > 0 || (prev.isNotEmpty() && list.size != prev.size))) saveIcons(list)
         if (geminiKey.isNotBlank()) { val l = learned(); if (list.any { needsAi(it, l) }) organize(force = false) }
     }
@@ -478,7 +481,10 @@ class Siftra(private val ctx: Context) {
                 status = if (show) "" else "Sorted ✓"
             } catch (e: Exception) { pr.error = e.message ?: "Gemini failed"; status = "Gemini: ${e.message}" }
             pr.running = false
-        } else status = "Sorted ✓"
+        } else status = when {
+            unknown.isEmpty() -> "Everything is sorted ✓"
+            else -> "${unknown.size} app${if (unknown.size > 1) "s" else ""} in Other · add a Gemini key in Settings › Sorting to place them"
+        }
         regroup()
     }
 
@@ -529,7 +535,7 @@ class Siftra(private val ctx: Context) {
     fun favoriteApps() = favorites.mapNotNull { k -> visible.firstOrNull { it.key == k } }
 
     fun launch(a: AppItem, bounds: Rect?) {
-        try { la.startMainActivity(a.component, a.user, bounds, null) } catch (_: Exception) { return }
+        try { la.startMainActivity(a.component, a.user, bounds, null) } catch (_: Exception) { status = "Couldn't open ${a.label}"; return }
         recordLaunch(a)
     }
 

@@ -120,7 +120,7 @@ private fun SettingsHome(s: Siftra, isHome: Boolean, onClose: () -> Unit, onSetH
     }
 }
 
-object BuildConfigLite { const val VERSION = "0.5.8" }
+object BuildConfigLite { const val VERSION = "0.5.9" }
 
 @Composable
 private fun LookPage(s: Siftra, back: () -> Unit) = Page {
@@ -380,6 +380,8 @@ fun WelcomeScreen(s: Siftra, onSetHome: () -> Unit, onDone: () -> Unit) {
                         T("Make it home", 52.sp, display = true)
                         T("Set Siftra as your default home screen to unlock app shortcuts and the Home button. Your Samsung home stays installed: switch back anytime in Settings › Apps › Default apps.",
                             15.sp, color = muted(), lineHeight = 22.sp)
+                        T("Tip: swipe right on home for widgets. Notification dots, swipe-down and double-tap to lock are in Settings › Gestures & dots.",
+                            13.sp, color = muted(), lineHeight = 19.sp)
                     }
                 }
             }

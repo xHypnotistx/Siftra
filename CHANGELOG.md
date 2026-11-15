@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.9 — Polish & fixes
+
+- **Fixed: the widget swipe could leave home frozen.** Home used to sit inside a lazily composed pager. In long test runs it sometimes stopped reacting once apps finished loading: the model was ready, but the screen kept showing the empty first frame. Home and the widget page are now two plain pages in a custom swipe container. Both stay composed and nothing is lazy. Six full test runs with no stall since, against stalls in five of the nine runs before.
+- **Screen reader.**
+  - The ⟲ and ⋯ buttons are announced as "Re-sort apps" and "Settings".
+  - The search bar and "All apps" have proper names, and the clock offers "Change clock style".
+  - App names are no longer read twice (icon and label).
+  - Status messages are announced when they appear.
+  - Only the visible page (home or widgets) is exposed.
+- **Honest Re-sort.** Without a Gemini key, ⟲ says how many apps are still in Other and where to add a key. Before, it said "Sorted ✓" even when nothing happened. Every status message now clears itself.
+- **First start** says "Sorting your apps…" instead of showing an empty home while the list loads.
+- **Phones keep home upright.** The layouts are built for portrait. Tablets and unfolded foldables can still rotate.
+- If an app can't be opened, Siftra says so instead of doing nothing.
+- The Gemini progress screen lists at most 60 apps; the ring still counts all of them. This keeps a full re-sort of hundreds of apps smooth.
+- Welcome mentions the widget page and Settings › Gestures & dots.
+- README rewritten for everything in 0.5.x.
+- Tests: 31 passing, including labels, the no-key message clearing itself and the orientation lock. Each UI test now flushes pending frames at teardown.
+
 ## 0.5.8 — Smarter sorting
 
 - **Learns from your moves.** If every app you moved from one developer went to the same group, that developer's other apps go there too.

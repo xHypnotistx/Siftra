@@ -22,6 +22,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -35,6 +36,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
@@ -56,6 +59,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.max
@@ -140,6 +144,45 @@ object WidgetHost {
         val all = (m.installedProviders + users.filter { it != me }.flatMap { u -> try { m.getInstalledProvidersForProfile(u) } catch (_: Exception) { emptyList() } })
             .distinctBy { it.provider.flattenToString() + it.profile.hashCode() }
         return all.groupBy { it.provider.packageName }.toList()
+    }
+}
+
+/* ======================= home ⇄ widgets ======================= */
+
+/** Where the home/widgets swipe stands: 0 = home, [width] = widget page. */
+@Stable
+class HomePages {
+    val x = androidx.compose.animation.core.Animatable(0f)
+    var width by mutableFloatStateOf(1f)
+    /** Changes only when the swipe crosses halfway, so reading it doesn't recompose on every frame. */
+    val onWidgets by derivedStateOf { x.value > width / 2 }
+    private val settle = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.9f, stiffness = 380f)
+    suspend fun showHome(velocity: Float = 0f) { x.animateTo(0f, settle, velocity) }
+    suspend fun showWidgets(velocity: Float = 0f) { x.animateTo(width, settle, velocity) }
+}
+
+/**
+ * Two plain pages side by side. Both stay composed (widget views survive paging), only the visible one is exposed to
+ * TalkBack, and nothing is lazily composed, so home always reacts to its state.
+ */
+@Composable
+fun SwipePages(pages: HomePages, enabled: Boolean, modifier: Modifier, widgets: @Composable () -> Unit, home: @Composable () -> Unit) {
+    val scope = rememberCoroutineScope()
+    Box(modifier.onSizeChanged { pages.width = it.width.toFloat().coerceAtLeast(1f) }
+        .draggable(
+            androidx.compose.foundation.gestures.rememberDraggableState { d ->
+                scope.launch { pages.x.snapTo((pages.x.value + d).coerceIn(0f, pages.width)) }
+            },
+            androidx.compose.foundation.gestures.Orientation.Horizontal, enabled = enabled,
+            onDragStopped = { v ->
+                if (v > 900f || (v > -900f && pages.x.value > pages.width / 2)) pages.showWidgets(v) else pages.showHome(v)
+            },
+        )) {
+        val onW = pages.onWidgets
+        Box(Modifier.fillMaxSize().graphicsLayer { translationX = pages.x.value }
+            .then(if (onW) Modifier.clearAndSetSemantics { } else Modifier)) { home() }
+        Box(Modifier.fillMaxSize().graphicsLayer { translationX = pages.x.value - pages.width }
+            .then(if (!onW) Modifier.clearAndSetSemantics { } else Modifier)) { widgets() }
     }
 }
 
