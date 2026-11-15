@@ -72,7 +72,9 @@ object Rules {
             "bereal", "mastodon", "tumblr"),
         Group.FINANCE to listOf("bank", "banka", "garanti", "akbank", "isbank", "ziraat", "yapikredi", "ykb", "papara",
             "enpara", "qnb", "vakif", "halkbank", "denizbank", "paypal", "binance", "revolut", "btcturk", "paribu",
-            "ininal", "tosla", "cüzdan", "wallet", "borsa", "kripto", "crypto", "wise"),
+            "ininal", "tosla", "cüzdan", "wallet", "borsa", "kripto", "crypto", "wise", "iscep", "işcep", "kuveyt",
+            "finans", "ondijital", "money", "fibabanka", "odeabank", "şekerbank", "albaraka", "hsbc", "teb", "ing",
+            "vakıf", "bankası", "bankacılık", "midas", "colendi"),
         Group.SHOPPING to listOf("trendyol", "hepsiburada", "amazon", "n11", "getir", "yemeksepeti", "temu",
             "aliexpress", "sahibinden", "letgo", "dolap", "migros", "a101", "shein", "ebay", "ikea", "zara", "çiçeksepeti"),
         Group.TRAVEL to listOf("maps", "waze", "uber", "bitaksi", "booking", "airbnb", "turkishairlines", "pegasus",
@@ -83,6 +85,9 @@ object Rules {
             "riotgames", "gameloft", "king.com"),
         Group.PRODUCTIVITY to listOf("office", "word", "excel", "powerpoint", "notion", "obsidian", "todo", "outlook",
             "slack", "teams", "zoom", "trello", "evernote", "todoist", "ticktick", "chatgpt", "claude", "gemini"),
+        Group.TOOLS to listOf("vpn", "defender", "scmx", "antivirus", "security", "cleaner", "rar", "rarlab", "zip",
+            "telekom", "turkcell", "vodafone", "keyboard", "swiftkey", "gboard", "scanner", "flashlight", "calculator",
+            "translate", "launcher", "widget", "backup", "authenticator"),
     )
 
     private val split = Regex("[^a-z0-9çğıöşü]+")
@@ -119,8 +124,6 @@ object Rules {
 
 object Gemini {
     fun classify(key: String, model: String, apps: List<AppItem>): Map<String, Group> {
-        val allowed = listOf(Group.GOV, Group.INSPIRE, Group.SOCIAL, Group.MEDIA, Group.GAMES, Group.FINANCE,
-            Group.SHOPPING, Group.TRAVEL, Group.PRODUCTIVITY, Group.TOOLS, Group.OTHER)
         val prompt = buildString {
             appendLine("Sort these Android apps into exactly one group each.")
             appendLine("Groups: GOV=official government/public services, INSPIRE=visual inspiration & moodboards, SOCIAL, MEDIA=video/music/news/photo, GAMES, FINANCE=banking/payments/crypto, SHOPPING=shops/food delivery/marketplaces, TRAVEL=maps/transport/flights/hotels, PRODUCTIVITY=work/notes/office/AI assistants, TOOLS=utilities/system/settings, OTHER.")
@@ -143,12 +146,25 @@ object Gemini {
             ?: throw IOException("Empty answer")
         val text = (0 until parts.length()).mapNotNull { parts.optJSONObject(it) }
             .filter { !it.optBoolean("thought") }.joinToString("") { it.optString("text") }
-        val obj = JSONObject(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1))
-        return apps.associate { a ->
-            a.pkg to (allowed.firstOrNull { it.name == obj.optString(a.pkg).uppercase() } ?: Group.OTHER)
+        return parse(text, apps)
+    }
+
+    private val allowed = listOf(Group.GOV, Group.INSPIRE, Group.SOCIAL, Group.MEDIA, Group.GAMES, Group.FINANCE,
+        Group.SHOPPING, Group.TRAVEL, Group.PRODUCTIVITY, Group.TOOLS, Group.OTHER)
+
+    /** Reads the model's JSON (tolerates code fences / chatter); unknown or missing ids become OTHER. */
+    fun parse(text: String, apps: List<AppItem>): Map<String, Group> {
+        val a = text.indexOf('{'); val b = text.lastIndexOf('}')
+        if (a < 0 || b <= a) throw IOException("Gemini answer had no JSON")
+        val obj = JSONObject(text.substring(a, b + 1))
+        return apps.associate { app ->
+            app.pkg to (allowed.firstOrNull { it.name == obj.optString(app.pkg).trim().uppercase() } ?: Group.OTHER)
         }
     }
 }
+
+/** Lets tests feed a synthetic app list instead of LauncherApps. */
+object TestHooks { @Volatile var apps: (() -> List<AppItem>)? = null }
 
 /* ======================= State ======================= */
 
@@ -234,6 +250,7 @@ class Siftra(private val ctx: Context) {
 
     suspend fun load() {
         val list = withContext(Dispatchers.Default) {
+            TestHooks.apps?.let { return@withContext it().sortedBy { a -> a.label.lowercase() } }
             val px = (56 * ctx.resources.displayMetrics.density).toInt()
             la.profiles.flatMap { u -> la.getActivityList(null, u) }
                 .filter { it.applicationInfo.packageName != ctx.packageName }
@@ -310,7 +327,7 @@ class Siftra(private val ctx: Context) {
     fun move(a: AppItem, g: Group) { prefs.edit().putString("ov|${a.pkg}", g.name).apply(); regroup() }
     fun hide(a: AppItem) { hidden = hidden + a.pkg; prefs.edit().putStringSet("hidden", hidden).apply() }
     fun unhideAll() { hidden = emptySet(); prefs.edit().putStringSet("hidden", hidden).apply() }
-    fun appInfo(a: AppItem) = la.startAppDetailsActivity(a.component, a.user, null, null)
+    fun appInfo(a: AppItem) { try { la.startAppDetailsActivity(a.component, a.user, null, null) } catch (_: Exception) {} }
     fun saveKey(k: String) { geminiKey = k.trim(); prefs.edit().putString("key", geminiKey).apply() }
     fun setExtras(v: Boolean) { showExtras = v; prefs.edit().putBoolean("extras", v).apply() }
 }

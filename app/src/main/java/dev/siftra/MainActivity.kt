@@ -45,6 +45,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -89,9 +90,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun askDefaultHome() {
-        val rm = getSystemService(RoleManager::class.java)
-        if (!rm.isRoleHeld(RoleManager.ROLE_HOME)) startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME), 1)
-        else startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS))
+        try {
+            val rm = getSystemService(RoleManager::class.java)
+            if (!rm.isRoleHeld(RoleManager.ROLE_HOME)) startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME), 1)
+            else startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS))
+        } catch (_: Exception) { startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS)) }
     }
 
     fun isDefaultHome() = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
@@ -168,7 +171,8 @@ private fun Root(s: Siftra, homePressed: Int, setBlur: (Int) -> Unit, askHome: (
             val homeUi = remember(ui, light) { if (light) lightVariant(ctxT, ui) else ui }
             CompositionLocalProvider(LocalInk provides (if (light) Color(0xFF231D4F) else Color.White), LocalUi provides homeUi) {
             Home(
-                s, sts, openGroup, Modifier.graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur),
+                s, sts, openGroup, Modifier.graphicsLayer { alpha = homeAlpha; scaleX = homeScale; scaleY = homeScale }.blur(homeBlur)
+                    .then(if (drawer || settings) Modifier.clearAndSetSemantics { } else Modifier),   // hidden home: inert
                 isHome = isHome,
                 onGroup = { lastGroup = it; openGroup = it },
                 onLaunch = ::open, onLong = onLong,
@@ -378,7 +382,8 @@ private fun Drawer(s: Siftra, focusSearch: Boolean, onClose: () -> Unit, onLaunc
         sections.associate { (g, l) -> (g to i).also { i += 1 + (l.size + 3) / 4 } }
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
+    Column(Modifier.fillMaxSize().noRipple { }                          // swallow taps so nothing hits the hidden home
+        .statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(
             Modifier.padding(horizontal = 18.dp).padding(top = 14.dp).pointerInput(Unit) {
                 var acc = 0f

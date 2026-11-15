@@ -120,7 +120,7 @@ private fun glassEffect(ribbed: Boolean, density: Float): RenderEffect = effects
         android.graphics.RenderEffect.createChainEffect(
             android.graphics.RenderEffect.createRuntimeShaderEffect(sh, "content"), blur
         ).asComposeRenderEffect()
-    } catch (_: Exception) { blur.asComposeRenderEffect() }
+    } catch (_: Throwable) { blur.asComposeRenderEffect() }
     else blur.asComposeRenderEffect()
 }
 

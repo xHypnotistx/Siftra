@@ -110,12 +110,13 @@ fun ClockView(style: ClockStyle, modifier: Modifier = Modifier) {
     val ink = LocalInk.current
     when (style) {
         ClockStyle.MONOLITH -> Row(modifier, verticalAlignment = Alignment.Top) {
-            Column {
-                T(f("HH"), 104.sp, display = true, lineHeight = 88.sp)
-                T(f("mm"), 104.sp, display = true, italic = true, color = ui.accent, lineHeight = 88.sp)
+            Box {                                    // tightly stacked digits, minutes tucked under the hours
+                T(f("HH"), 104.sp, display = true, lineHeight = 104.sp)
+                T(f("mm"), 104.sp, display = true, italic = true, color = ui.accent, lineHeight = 104.sp,
+                    modifier = Modifier.padding(top = 86.dp))
             }
             Spacer(Modifier.weight(1f))
-            Column(Modifier.padding(top = 112.dp, end = 4.dp), horizontalAlignment = Alignment.End) {
+            Column(Modifier.padding(top = 120.dp, end = 4.dp), horizontalAlignment = Alignment.End) {
                 T(f("EEEE").uppercase(loc), 11.sp, weight = FontWeight.SemiBold, alpha = 0.75f, tracking = 2.4.sp)
                 T(f("d MMM"), 30.sp, display = true, italic = true)
             }
